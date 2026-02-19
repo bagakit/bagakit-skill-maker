@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "include": [
+    "SKILL.md",
+    "agents",
+    "references",
+    "scripts"
+  ]
+}
