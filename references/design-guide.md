@@ -115,3 +115,13 @@ Bagakit philosophy allows project-local evolution:
 - standalone behavior works without external skill dependencies,
 - optional contract fallback path exists,
 - `[[BAGAKIT]]` driver instructions are explicit where the skill needs response-driving behavior.
+
+## 9) Validator-Backed Gates
+
+The `bagakit_skill_maker validate` gate is expected to fail on:
+- missing explicit trigger semantics in frontmatter description (`when/适用/用于`),
+- missing standalone-first or missing `[[BAGAKIT]]` footer contract,
+- hard direct flow-call to another skill without optional contract wording,
+- payload include drift (duplicate/out-of-root/README runtime payload),
+- oversized SKILL.md (`> 500` lines),
+- ambiguous legacy/workaround runtime file names.

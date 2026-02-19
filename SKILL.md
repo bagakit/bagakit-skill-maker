@@ -57,6 +57,7 @@ sh scripts/bagakit_skill_maker.sh validate --skill-dir <skill-dir>
 ```
 - Ensure `SKILL_PAYLOAD.json` excludes `README.md` and only ships runtime payload.
 - Ensure cross-skill interaction is optional and schema/rule-driven, never mandatory direct flow-call.
+- Ensure `SKILL.md` keeps a bounded context budget (default hard gate: `<= 500` lines).
 
 6) Iterate from production misses.
 - If over-triggering: narrow frontmatter description with stronger boundaries.

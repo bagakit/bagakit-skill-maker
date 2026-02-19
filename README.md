@@ -21,6 +21,16 @@ sh scripts/bagakit_skill_maker.sh init --name my-skill --path /tmp --with-agents
 sh scripts/bagakit_skill_maker.sh validate --skill-dir /tmp/my-skill
 ```
 
+## Validation Gates (Final-State)
+
+`validate` enforces:
+- trigger-accurate frontmatter (`description` needs explicit "when/适用" semantics),
+- standalone-first design + `[[BAGAKIT]]` footer contract,
+- cross-skill exchange as optional contract/signal (no hard direct flow call),
+- runtime payload hygiene (`README.md` excluded; no duplicate/out-of-root include paths),
+- SKILL.md line budget (`<= 500`),
+- runtime naming clarity (reject generic/legacy/workaround file names).
+
 ## References
 
 - `references/design-guide.md`

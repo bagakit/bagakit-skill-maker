@@ -12,6 +12,23 @@ from typing import Any
 
 NAME_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$")
 PLACEHOLDER_HINTS = ("TODO", "[TODO", "replace")
+MAX_SKILL_LINES = 500
+FILE_STEM_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
+GENERIC_FILE_STEMS = {"helper", "helpers", "misc", "tmp", "temp", "util", "utils", "test", "tests"}
+LEGACY_TERMS = {"legacy", "compat", "deprecated", "workaround", "shim", "backward", "old"}
+OPTIONAL_HINTS = (
+    "optional",
+    "if available",
+    "if installed",
+    "contract",
+    "schema",
+    "signal",
+    "可选",
+    "契约",
+    "信号",
+)
+ALLOWED_SCRIPT_EXTENSIONS = {".sh", ".py", ".js", ".ts"}
+ALLOWED_REFERENCE_EXTENSIONS = {".md", ".txt", ".json", ".yaml", ".yml"}
 
 
 def eprint(*items: object) -> None:
@@ -52,6 +69,7 @@ description: TODO: describe what this skill does and exactly when to use it.
 
 - Keep this skill focused on one coherent operational job.
 - Put "when to use" trigger details in frontmatter `description`.
+- Keep the skill standalone-first.
 
 ## Workflow
 
@@ -59,6 +77,18 @@ description: TODO: describe what this skill does and exactly when to use it.
 2. Keep SKILL.md concise; move deep material to references.
 3. Put deterministic/fragile repeatable steps into scripts.
 4. Validate and iterate based on over-trigger/under-trigger behavior.
+
+## Cross-Skill Contract
+
+- Cross-skill interaction must stay optional.
+- Exchange only schema/contract signals; never hard-call another skill flow.
+
+## `[[BAGAKIT]]` Footer
+
+```text
+[[BAGAKIT]]
+- Skill: Status=<in_progress|done|blocked>; Evidence=<checks>; Next=<next action>
+```
 """
 
 
@@ -143,6 +173,73 @@ def load_payload(path: Path) -> tuple[dict[str, Any] | None, list[str]]:
     return data, []
 
 
+def line_is_optional_contract(line: str) -> bool:
+    lower = line.lower()
+    return any(hint in lower for hint in OPTIONAL_HINTS)
+
+
+def scan_hard_coupling(skill_text: str, own_name: str) -> list[str]:
+    errors: list[str] = []
+    for idx, line in enumerate(skill_text.splitlines(), 1):
+        lower = line.lower()
+        for token in re.findall(r"\bbagakit-[a-z0-9-]+\b", lower):
+            if token == own_name:
+                continue
+            if not line_is_optional_contract(lower):
+                errors.append(
+                    f"line {idx}: cross-skill reference '{token}' must be optional and contract/signal based"
+                )
+
+        direct_skill_match = re.search(r"/skills/([a-z0-9-]+)", lower)
+        if direct_skill_match and re.search(r"\b(bash|sh|python3?|node)\b", lower):
+            target_skill = direct_skill_match.group(1)
+            if target_skill != own_name and not line_is_optional_contract(lower):
+                errors.append(
+                    f"line {idx}: direct call to other skill '{target_skill}' is not allowed without optional contract wording"
+                )
+    return errors
+
+
+def audit_runtime_files(skill_dir: Path) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    runtime_dirs = {
+        "scripts": ALLOWED_SCRIPT_EXTENSIONS,
+        "references": ALLOWED_REFERENCE_EXTENSIONS,
+    }
+
+    for dirname, allowed_ext in runtime_dirs.items():
+        root = skill_dir / dirname
+        if not root.exists():
+            continue
+        for path in sorted(root.rglob("*")):
+            if not path.is_file():
+                continue
+            rel = path.relative_to(skill_dir)
+            stem = path.stem.lower()
+            suffix = path.suffix.lower()
+            if suffix and suffix not in allowed_ext:
+                warnings.append(f"unexpected extension under {dirname}: {rel}")
+
+            if not FILE_STEM_RE.match(stem):
+                errors.append(f"file name must be lowercase/digits/hyphen/underscore only: {rel}")
+
+            if stem in GENERIC_FILE_STEMS:
+                errors.append(f"file name is too generic (not self-explanatory): {rel}")
+
+            tokens = [tok for tok in re.split(r"[-_]+", stem) if tok]
+            bad_terms = sorted(set(tok for tok in tokens if tok in LEGACY_TERMS))
+            if bad_terms:
+                errors.append(
+                    f"file name contains legacy/workaround term {bad_terms}; rewrite to final-state naming: {rel}"
+                )
+
+            if "_" in path.name:
+                warnings.append(f"prefer hyphen-case file naming for clarity: {rel}")
+
+    return errors, warnings
+
+
 def cmd_validate(args: argparse.Namespace) -> int:
     skill_dir = Path(args.skill_dir).expanduser().resolve()
     errors: list[str] = []
@@ -159,7 +256,8 @@ def cmd_validate(args: argparse.Namespace) -> int:
             eprint(f"error: {err}")
         return 1
 
-    fm, fm_errors = parse_frontmatter(skill_md.read_text(encoding="utf-8"))
+    skill_text = skill_md.read_text(encoding="utf-8")
+    fm, fm_errors = parse_frontmatter(skill_text)
     errors.extend(fm_errors)
     allowed_keys = {"name", "description"}
     unknown = sorted(set(fm.keys()) - allowed_keys)
@@ -176,6 +274,10 @@ def cmd_validate(args: argparse.Namespace) -> int:
         errors.append("frontmatter missing required key: description")
     elif any(hint in description for hint in PLACEHOLDER_HINTS):
         errors.append("frontmatter description still looks like placeholder text")
+    elif not re.search(r"\bwhen\b|适用|当|用于", description.lower()):
+        errors.append("frontmatter description should include clear trigger wording (e.g. 'use when ...')")
+    if description and len(description) < 40:
+        warnings.append("frontmatter description may be too short for accurate triggering")
 
     payload, payload_errors = load_payload(payload_file)
     errors.extend(payload_errors)
@@ -189,11 +291,16 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
     if include:
         include_set = set(include)
+        if len(include_set) != len(include):
+            errors.append("SKILL_PAYLOAD.json include contains duplicate items")
         if "SKILL.md" not in include_set:
             errors.append("SKILL_PAYLOAD.json include must contain SKILL.md")
         if "README.md" in include_set:
             errors.append("SKILL_PAYLOAD.json include must not contain README.md")
         for path in include:
+            if path.startswith("/") or ".." in Path(path).parts:
+                errors.append(f"payload path must stay inside skill directory: {path}")
+                continue
             if not (skill_dir / path).exists():
                 errors.append(f"payload path missing on disk: {path}")
         for runtime_dir in ("scripts", "references", "agents"):
@@ -204,7 +311,27 @@ def cmd_validate(args: argparse.Namespace) -> int:
             if has and not exists:
                 errors.append(f"payload includes missing directory: {runtime_dir}")
 
-    skill_text = skill_md.read_text(encoding="utf-8")
+    lines = skill_text.splitlines()
+    if len(lines) > MAX_SKILL_LINES:
+        errors.append(f"SKILL.md must stay within {MAX_SKILL_LINES} lines (current={len(lines)})")
+
+    if "[[BAGAKIT]]" not in skill_text:
+        errors.append("SKILL.md must define [[BAGAKIT]] footer contract")
+    if "standalone" not in skill_text.lower():
+        errors.append("SKILL.md must state standalone-first design explicitly")
+    if not (
+        "optional" in skill_text.lower()
+        and any(key in skill_text.lower() for key in ("contract", "schema", "signal", "契约", "信号"))
+    ):
+        errors.append("SKILL.md must describe optional cross-skill contract/signal exchange")
+    if "## Workflow" not in skill_text:
+        errors.append("SKILL.md must include a '## Workflow' section")
+
+    errors.extend(scan_hard_coupling(skill_text, name or ""))
+    runtime_errors, runtime_warnings = audit_runtime_files(skill_dir)
+    errors.extend(runtime_errors)
+    warnings.extend(runtime_warnings)
+
     if "bash .bagakit/" in skill_text:
         warnings.append(
             "SKILL.md contains direct '.bagakit' script call; ensure this is optional and not a hard dependency"

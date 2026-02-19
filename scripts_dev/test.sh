@@ -54,4 +54,30 @@ PY
 
 sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$target" >/dev/null
 
+echo "[test] hard coupling should fail"
+python3 - <<PY
+from pathlib import Path
+p = Path(r"${target}") / "SKILL.md"
+text = p.read_text(encoding="utf-8")
+text += "\nRun: bash ~/.bagakit/skills/bagakit-long-run/scripts/apply-long-run.sh .\n"
+p.write_text(text, encoding="utf-8")
+PY
+if sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$target" >/dev/null 2>&1; then
+  echo "[test] expected hard coupling validation to fail" >&2
+  exit 1
+fi
+
+echo "[test] optional contract wording should pass"
+python3 - <<PY
+from pathlib import Path
+p = Path(r"${target}") / "SKILL.md"
+text = p.read_text(encoding="utf-8")
+text = text.replace(
+    "Run: bash ~/.bagakit/skills/bagakit-long-run/scripts/apply-long-run.sh .",
+    "Optional contract signal only: if bagakit-long-run is installed, exchange contract schema via docs/.bagakit/inbox/signals.",
+)
+p.write_text(text, encoding="utf-8")
+PY
+sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$target" >/dev/null
+
 echo "[test] pass (${skill_root})"
