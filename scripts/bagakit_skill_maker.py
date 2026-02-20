@@ -71,6 +71,27 @@ description: TODO: describe what this skill does and exactly when to use it.
 - Put "when to use" trigger details in frontmatter `description`.
 - Keep the skill standalone-first.
 
+## When to Use This Skill
+
+- User asks to create or refactor a skill with a clear operational boundary.
+- User needs stricter trigger wording, payload hygiene, or optional contract rules.
+- User wants split/merge recommendations backed by validation checks.
+
+## When NOT to Use This Skill
+
+- User only needs one-off coding help and does not need a reusable skill.
+- User asks for hard coupling to another skill flow as a mandatory dependency.
+- User asks for broad toolbox behavior without a clear scope boundary.
+
+## Decision Categories
+
+| Category | Symptom | Action |
+| --- | --- | --- |
+| Trigger boundary | Over-trigger/under-trigger | tighten frontmatter + positive/negative examples |
+| Granularity | Scope drift across unrelated tasks | split or merge with explicit validation matrix |
+| Contract | Direct flow-calls to other skills | switch to optional rule/schema signal contract |
+| Payload | Runtime/dev files mixed | trim `SKILL_PAYLOAD.json` to runtime-only files |
+
 ## Workflow
 
 1. Capture concrete triggering and non-triggering examples.
@@ -82,6 +103,46 @@ description: TODO: describe what this skill does and exactly when to use it.
 
 - Cross-skill interaction must stay optional.
 - Exchange only schema/contract signals; never hard-call another skill flow.
+
+## Fallback Path (No Clear Fit)
+
+- If scope is still ambiguous, ask one clarifying question on boundaries.
+- If no reusable skill pattern is found, execute task directly and record why no skill route is used.
+- If the request conflicts with standalone-first rules, provide a compliant alternative.
+
+## Response Templates
+
+### Create
+
+```text
+Result: created <skill-name> with clear trigger boundary.
+Checks: validate pass + payload gate pass.
+Next: run one positive and one negative trigger scenario.
+```
+
+### Improve
+
+```text
+Result: improved existing skill by narrowing trigger scope and reducing ambiguity.
+Checks: before/after trigger matrix + validate pass.
+Next: observe one production round and collect misses.
+```
+
+### Merge
+
+```text
+Result: merged overlapping skills into one coherent scope and contract.
+Checks: merge map + de-dup rationale + validate pass.
+Next: run post-merge trigger matrix and adjust boundaries.
+```
+
+### No Clear Skill Fit
+
+```text
+Result: no stable reusable pattern identified yet.
+Checks: documented fallback reason + standalone constraints reviewed.
+Next: complete task directly and collect examples for future skill design.
+```
 
 ## `[[BAGAKIT]]` Footer
 
@@ -176,6 +237,17 @@ def load_payload(path: Path) -> tuple[dict[str, Any] | None, list[str]]:
 def line_is_optional_contract(line: str) -> bool:
     lower = line.lower()
     return any(hint in lower for hint in OPTIONAL_HINTS)
+
+
+def section_has_bullets(skill_text: str, heading_re: str, min_count: int = 1) -> bool:
+    match = re.search(heading_re, skill_text, flags=re.IGNORECASE | re.MULTILINE)
+    if not match:
+        return False
+    tail = skill_text[match.end() :]
+    next_heading = re.search(r"(?m)^##\s+", tail)
+    block = tail[: next_heading.start()] if next_heading else tail
+    bullets = re.findall(r"(?m)^\s*[-*]\s+\S", block)
+    return len(bullets) >= min_count
 
 
 def scan_hard_coupling(skill_text: str, own_name: str) -> list[str]:
@@ -326,6 +398,16 @@ def cmd_validate(args: argparse.Namespace) -> int:
         errors.append("SKILL.md must describe optional cross-skill contract/signal exchange")
     if "## Workflow" not in skill_text:
         errors.append("SKILL.md must include a '## Workflow' section")
+    if not section_has_bullets(skill_text, r"^##\s+When to Use(?: This Skill)?\s*$", min_count=2):
+        errors.append("SKILL.md must include '## When to Use' section with at least 2 bullet items")
+    if not section_has_bullets(skill_text, r"^##\s+When NOT to Use(?: This Skill)?\s*$", min_count=2):
+        errors.append("SKILL.md must include '## When NOT to Use' section with at least 2 bullet items")
+    if not section_has_bullets(
+        skill_text,
+        r"^##\s+(?:Fallback Path(?:\s*\(.*\))?|When No Clear Fit(?:\s*\(.*\))?)\s*$",
+        min_count=1,
+    ):
+        errors.append("SKILL.md must include a fallback section with at least 1 bullet action")
 
     errors.extend(scan_hard_coupling(skill_text, name or ""))
     runtime_errors, runtime_warnings = audit_runtime_files(skill_dir)

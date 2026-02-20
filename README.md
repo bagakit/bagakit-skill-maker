@@ -25,6 +25,7 @@ sh scripts/bagakit_skill_maker.sh validate --skill-dir /tmp/my-skill
 
 `validate` enforces:
 - trigger-accurate frontmatter (`description` needs explicit "when/适用" semantics),
+- explicit trigger boundaries in body (`When to Use` / `When NOT to Use`) and fallback path,
 - standalone-first design + `[[BAGAKIT]]` footer contract,
 - cross-skill exchange as optional contract/signal (no hard direct flow call),
 - runtime payload hygiene (`README.md` excluded; no duplicate/out-of-root include paths),

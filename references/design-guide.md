@@ -33,6 +33,10 @@ Always define:
 
 Then refine frontmatter `description` until trigger boundaries are explicit.
 
+Also make `SKILL.md` explicit:
+- `## When to Use` with concrete trigger bullets,
+- `## When NOT to Use` with at least two boundary bullets.
+
 ## 4) Progressive Disclosure
 
 - Keep `SKILL.md` concise and execution-oriented.
@@ -72,6 +76,18 @@ Reference pattern:
 - LongRun: Item=<id>; Status=<...>; Evidence=<commands/checks>; Next=<resume command>
 - SkillMaker: Scope=<create|improve|merge>; Evidence=<trigger tests + payload validation>; Next=<next action>
 ```
+
+## 6.1) Fallback and Response Templates
+
+Required operational fallback:
+- include a `Fallback` / `No Clear Fit` path for ambiguous or non-reusable requests,
+- if no stable skill pattern exists, execute directly and record why skill route was not selected.
+
+Recommended response templates:
+- **Create**: result + checks + next.
+- **Improve**: result + before/after evidence + next.
+- **Merge**: merge map + de-dup evidence + next.
+- **No Clear Fit**: fallback rationale + direct execution next step.
 
 ## 7) Improve/Merge Procedure
 
@@ -121,6 +137,8 @@ Bagakit philosophy allows project-local evolution:
 The `bagakit_skill_maker validate` gate is expected to fail on:
 - missing explicit trigger semantics in frontmatter description (`when/适用/用于`),
 - missing standalone-first or missing `[[BAGAKIT]]` footer contract,
+- missing `When to Use` / `When NOT to Use` sections,
+- missing fallback/no-clear-fit path,
 - hard direct flow-call to another skill without optional contract wording,
 - payload include drift (duplicate/out-of-root/README runtime payload),
 - oversized SKILL.md (`> 500` lines),
