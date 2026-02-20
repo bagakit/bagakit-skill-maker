@@ -15,6 +15,7 @@ This skill combines:
 - Keep a guidance-first constraint budget: gate only hard invariants, avoid over-constraining reasoning with heavy schema.
 - Guide keep/split/merge decisions so each skill keeps clear boundaries instead of becoming a toolbox.
 - Enforce output-route + archive best practice (deliverable archetype, default route, optional adapters or standalone-only declaration, completion archive gate).
+- Provide guidance packs (patterns / anti-patterns / examples) before escalating to heavier gate logic.
 - Offer Bagakit ecosystem mappings as optional examples, not hard requirements.
 - Support project-local evolution by improving/merging/replacing with upstream best versions under explicit validation.
 
@@ -41,3 +42,6 @@ sh scripts/bagakit_skill_maker.sh validate --skill-dir /tmp/my-skill
 
 - `references/core-design-guide.md` (portable core rules)
 - `references/bagakit-profile-guide.md` (Bagakit overlay rules)
+- `references/guidance-pack-patterns.md`
+- `references/guidance-pack-anti-patterns.md`
+- `references/guidance-pack-examples.md`

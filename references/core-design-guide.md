@@ -58,6 +58,11 @@ Rules:
 - If strict gate behavior is required regardless of operator, and autonomy brings no meaningful quality gain, enforce programmatic validation or strict SOP.
 - Promote guidance into hard gates only after repeated production failures of the same pattern.
 
+Guidance pack files for this skill:
+- `references/guidance-pack-patterns.md`
+- `references/guidance-pack-anti-patterns.md`
+- `references/guidance-pack-examples.md`
+
 ## 6) Core Contract Rules
 
 - Standalone-first execution is mandatory.

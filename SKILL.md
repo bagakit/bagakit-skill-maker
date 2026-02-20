@@ -95,6 +95,7 @@ Build skills that are:
 - Define default output route when no external driver is detected.
 - Define optional adapter routes for external systems (for example task driver / spec system / memory system), and keep them optional.
 - If Bagakit profile is enabled, document concrete adapter mapping as optional examples only.
+- Reuse guidance pack checklists/examples before adding any new hard schema constraints.
 - Define archive gate: every output must have an explicit destination path/id before task can be marked complete.
 
 5) Plan progressive disclosure.
@@ -165,6 +166,9 @@ sh scripts/bagakit_skill_maker.sh validate --skill-dir <skill-dir>
 - Use progressive references:
   - `references/core-design-guide.md` (portable core rules; always apply)
   - `references/bagakit-profile-guide.md` (Bagakit profile overlay; required for `bagakit-*`)
+  - `references/guidance-pack-patterns.md` (recommended output/archive patterns)
+  - `references/guidance-pack-anti-patterns.md` (what to avoid)
+  - `references/guidance-pack-examples.md` (copy-ready examples)
 - For generic/non-Bagakit skills, apply core guide only.
 
 ## `[[BAGAKIT]]` RFDP (Response Footer Driven Protocol)
