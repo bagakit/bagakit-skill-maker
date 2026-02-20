@@ -42,6 +42,7 @@ sh scripts/bagakit_skill_maker.sh validate --skill-dir /tmp/my-skill
 
 - `references/core-design-guide.md` (portable core rules)
 - `references/bagakit-profile-guide.md` (Bagakit overlay rules)
+- `references/skill-discovery-sources.md` (search-first discovery; standalone with optional ecosystem accelerators)
 - `references/guidance-pack-patterns.md`
 - `references/guidance-pack-anti-patterns.md`
 - `references/guidance-pack-examples.md`

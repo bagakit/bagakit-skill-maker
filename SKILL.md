@@ -58,6 +58,17 @@ Build skills that are:
 - If a strict gate is required regardless of who executes, and extra autonomy does not improve outcomes, escalate to programmatic validation or strict SOP.
 - Promote guidance to hard gates only when repeated production failures prove it is necessary.
 
+## Open Discovery Principle (Avoid Closed-Door Design)
+
+- For unresolved skill problems, discovery is mandatory before implementation.
+- Use `references/skill-discovery-sources.md` as the default discovery playbook:
+  1. define keyword sets,
+  2. search ordered source layers,
+  3. compare at least three candidates from the discovery yellow pages,
+  4. log reuse/adapt/reject decisions.
+- If discovery finds a suitable skill, install/adapt first; create from scratch only with a recorded gap rationale.
+- If another discovery skill/tool is available, use it as an optional accelerator on top of the default standalone path.
+
 ## Decision Categories
 
 | Category | Typical Symptom | Action |
@@ -70,6 +81,19 @@ Build skills that are:
 | Delivery archetype | unclear handoff target; completion feels subjective | classify deliverable type + define completion destinations |
 
 ## Workflow
+
+0) Search-first discovery before creation/improvement.
+- Do not start implementation immediately for unresolved problems.
+- Use `references/skill-discovery-sources.md` as the default discovery path.
+- Do not assume any specific discovery skill/CLI is installed; keep discovery flow standalone.
+- Search in this order:
+  1. project-local docs/contracts and known skill catalogs first,
+  2. reliable primary sources (official docs / standards / authoritative guides),
+  3. broader community solutions (GitHub / Stack Overflow / technical blogs),
+  4. experience-only writeups last.
+- Prefer ready-to-use skills/tools/code before designing from scratch.
+- If discovery finds a more suitable complementary skill, use it as an accelerator on top of this default search path.
+- Record useful findings (source + key takeaway + applicability) to avoid repeated search.
 
 1) Lock concrete use cases first.
 - Capture 3-5 real user prompts that should trigger the target skill.
@@ -166,6 +190,7 @@ sh scripts/bagakit_skill_maker.sh validate --skill-dir <skill-dir>
 - Use progressive references:
   - `references/core-design-guide.md` (portable core rules; always apply)
   - `references/bagakit-profile-guide.md` (Bagakit profile overlay; required for `bagakit-*`)
+  - `references/skill-discovery-sources.md` (search-first sources and strategy)
   - `references/guidance-pack-patterns.md` (recommended output/archive patterns)
   - `references/guidance-pack-anti-patterns.md` (what to avoid)
   - `references/guidance-pack-examples.md` (copy-ready examples)

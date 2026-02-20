@@ -31,6 +31,24 @@ Also require:
 - `## When to Use`
 - `## When NOT to Use`
 
+## 4.1) Search-First Discovery
+
+Before creating/improving/merging a skill for an unresolved problem:
+
+1. Search first; do not jump directly to implementation.
+2. Use `references/skill-discovery-sources.md` as the default standalone discovery playbook.
+3. Think in keyword sets (domain terms, task terms, synonym terms) before searching.
+4. Source order:
+   - project-local docs/contracts/catalogs,
+   - reliable primary sources (official docs, standards, authoritative guides),
+   - broader community solutions (GitHub, Stack Overflow, technical blogs),
+   - experience-only notes last.
+5. Prefer ready-to-use skills/tools/code where feasible.
+6. Record useful findings to avoid repeated search and to justify design choices.
+7. Discovery must remain standalone; do not require any single marketplace CLI/skill to exist.
+8. If discovery identifies a better complementary skill, use it as an optional accelerator, never as a required prerequisite.
+9. Compare at least three candidates before deciding `reuse` / `adapt` / `build-new` unless the first match is clearly authoritative and complete.
+
 ## 5) Progressive Disclosure
 
 - Keep `SKILL.md` concise and execution-oriented.
