@@ -46,6 +46,18 @@ Build skills that are:
 - Do not assume any concrete Bagakit skill is installed unless explicitly detected or requested.
 - If target skill is a Bagakit-series skill (`name` starts with `bagakit-`), Bagakit profile is required (for example `[[BAGAKIT]]` footer contract).
 
+## Constraint Budget (Guidance-First)
+
+- For high-ceiling agent workflows, prefer guidance and examples over heavy structured schema constraints.
+- If the work should be performed similarly by both agents and humans, and quality is mostly achieved by clear standards/examples, use a guidance pack.
+- Use programmatic gates only for hard invariants:
+  - standalone-first behavior,
+  - protocol format invariants (for example RFDP shape),
+  - runtime payload boundaries,
+  - completion destination evidence.
+- If a strict gate is required regardless of who executes, and extra autonomy does not improve outcomes, escalate to programmatic validation or strict SOP.
+- Promote guidance to hard gates only when repeated production failures prove it is necessary.
+
 ## Decision Categories
 
 | Category | Typical Symptom | Action |

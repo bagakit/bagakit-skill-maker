@@ -12,6 +12,7 @@ This skill combines:
 
 - Scaffold a new skill folder with `SKILL.md`, `SKILL_PAYLOAD.json`, `scripts/`, `references/` (optional `agents/`).
 - Validate frontmatter, payload boundaries, and contract policy violations.
+- Keep a guidance-first constraint budget: gate only hard invariants, avoid over-constraining reasoning with heavy schema.
 - Guide keep/split/merge decisions so each skill keeps clear boundaries instead of becoming a toolbox.
 - Enforce output-route + archive best practice (deliverable archetype, default route, optional adapters or standalone-only declaration, completion archive gate).
 - Offer Bagakit ecosystem mappings as optional examples, not hard requirements.

@@ -42,6 +42,22 @@ Rule of thumb:
 - medium freedom -> structured steps/pseudocode,
 - low freedom -> executable scripts.
 
+## 5.1) Constraint Budget (Guidance-First)
+
+For high-ceiling agent workflows, do not overfit behavior into rigid schema too early.
+
+Rules:
+- Prefer guidance + examples first.
+- If both agents and humans should execute in roughly the same way, and quality depends on clear standards with low creative variance, use a guidance pack.
+- Add programmatic gates only for hard invariants that are expensive to recover:
+  - standalone-first behavior,
+  - protocol shape (for example RFDP format),
+  - runtime payload boundary,
+  - completion destination evidence.
+- Do not force heavy structured fields for domain reasoning if agents can handle it better via guidance.
+- If strict gate behavior is required regardless of operator, and autonomy brings no meaningful quality gain, enforce programmatic validation or strict SOP.
+- Promote guidance into hard gates only after repeated production failures of the same pattern.
+
 ## 6) Core Contract Rules
 
 - Standalone-first execution is mandatory.
