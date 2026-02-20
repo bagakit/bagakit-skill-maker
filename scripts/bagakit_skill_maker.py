@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Scaffold and validate Bagakit-style skills."""
+"""Scaffold and validate portable skills with Bagakit-friendly defaults."""
 
 from __future__ import annotations
 
@@ -26,6 +26,53 @@ OPTIONAL_HINTS = (
     "可选",
     "契约",
     "信号",
+)
+COUPLING_HINTS = (
+    "must",
+    "require",
+    "required",
+    "depends",
+    "dependency",
+    "before",
+    "call",
+    "invoke",
+    "run",
+    "execute",
+    "bash",
+    "sh ",
+    "python",
+    "node",
+)
+NON_SKILL_BAGAKIT_TOKENS = {
+    "bagakit-series",
+    "bagakit-profile",
+    "bagakit-profile-guide",
+    "bagakit-home",
+}
+ACTION_HINTS = ("action", "execute", "execution", "task", "交付", "执行", "推进")
+MEMORY_HINTS = ("memory", "summary", "knowledge", "inbox", "沉淀", "记忆", "总结")
+ARCHIVE_HINTS = ("archive", "destination", "path", "id", "归档", "去向")
+ADAPTER_HINTS = (
+    "adapter",
+    "integration",
+    "connector",
+    "bridge",
+    "external",
+    "upstream",
+    "downstream",
+    "route",
+    "system",
+    "联动",
+)
+NO_ADAPTER_HINTS = (
+    "no adapter",
+    "no external",
+    "standalone-only",
+    "standalone first",
+    "none",
+    "无需联动",
+    "无联动",
+    "仅本地",
 )
 ALLOWED_SCRIPT_EXTENSIONS = {".sh", ".py", ".js", ".ts"}
 ALLOWED_REFERENCE_EXTENSIONS = {".md", ".txt", ".json", ".yaml", ".yml"}
@@ -91,6 +138,7 @@ description: TODO: describe what this skill does and exactly when to use it.
 | Granularity | Scope drift across unrelated tasks | split or merge with explicit validation matrix |
 | Contract | Direct flow-calls to other skills | switch to optional rule/schema signal contract |
 | Payload | Runtime/dev files mixed | trim `SKILL_PAYLOAD.json` to runtime-only files |
+| Output/archive | Outputs exist without clear destination or completion gate | define default route + optional adapters + archive handoff |
 
 ## Workflow
 
@@ -104,6 +152,25 @@ description: TODO: describe what this skill does and exactly when to use it.
 - Cross-skill interaction must stay optional.
 - Exchange only schema/contract signals; never hard-call another skill flow.
 
+## Output Routes and Default Mode
+
+- Classify this skill's deliverable archetype (execution-heavy / process-driver / memory-governance).
+- Define explicit outputs:
+  - `action-handoff`: what should be executed, with default route + optional adapters.
+  - `memory-handoff`: what should be retained, with default route + optional adapters (or explicit `none` rationale).
+  - `archive`: where closure evidence is written.
+- Define default output route when no external driver exists (for example local `plan-<slug>.md` + `summary-<slug>.md`).
+- Define optional adapter routes for external systems (for example task driver / spec system / memory system), or explicitly state `standalone-only/no-adapter`.
+- If needed, add a Bagakit profile section that maps to concrete systems as optional examples.
+- Keep route selection rule-driven and fallback-safe.
+
+## Archive Gate (Completion Handoff)
+
+- Every output must have a resolved destination path or id.
+- Archive must report action handoff destination + memory handoff destination (or explicit `none` rationale).
+- If adapter routes are unavailable, archive must still capture default local destinations.
+- Do not mark complete until action/memory/archive destinations are all explicit.
+
 ## Fallback Path (No Clear Fit)
 
 - If scope is still ambiguous, ask one clarifying question on boundaries.
@@ -116,7 +183,7 @@ description: TODO: describe what this skill does and exactly when to use it.
 
 ```text
 Result: created <skill-name> with clear trigger boundary.
-Checks: validate pass + payload gate pass.
+Checks: validate pass + payload gate pass + output/archive gate pass.
 Next: run one positive and one negative trigger scenario.
 ```
 
@@ -124,7 +191,7 @@ Next: run one positive and one negative trigger scenario.
 
 ```text
 Result: improved existing skill by narrowing trigger scope and reducing ambiguity.
-Checks: before/after trigger matrix + validate pass.
+Checks: before/after trigger matrix + validate pass + output/archive map verified.
 Next: observe one production round and collect misses.
 ```
 
@@ -132,7 +199,7 @@ Next: observe one production round and collect misses.
 
 ```text
 Result: merged overlapping skills into one coherent scope and contract.
-Checks: merge map + de-dup rationale + validate pass.
+Checks: merge map + de-dup rationale + validate pass + archive handoff path verified.
 Next: run post-merge trigger matrix and adjust boundaries.
 ```
 
@@ -240,14 +307,20 @@ def line_is_optional_contract(line: str) -> bool:
 
 
 def section_has_bullets(skill_text: str, heading_re: str, min_count: int = 1) -> bool:
-    match = re.search(heading_re, skill_text, flags=re.IGNORECASE | re.MULTILINE)
-    if not match:
+    block = section_block(skill_text, heading_re)
+    if block is None:
         return False
-    tail = skill_text[match.end() :]
-    next_heading = re.search(r"(?m)^##\s+", tail)
-    block = tail[: next_heading.start()] if next_heading else tail
     bullets = re.findall(r"(?m)^\s*[-*]\s+\S", block)
     return len(bullets) >= min_count
+
+
+def section_block(skill_text: str, heading_re: str) -> str | None:
+    match = re.search(heading_re, skill_text, flags=re.IGNORECASE | re.MULTILINE)
+    if not match:
+        return None
+    tail = skill_text[match.end() :]
+    next_heading = re.search(r"(?m)^##\s+", tail)
+    return tail[: next_heading.start()] if next_heading else tail
 
 
 def scan_hard_coupling(skill_text: str, own_name: str) -> list[str]:
@@ -256,6 +329,10 @@ def scan_hard_coupling(skill_text: str, own_name: str) -> list[str]:
         lower = line.lower()
         for token in re.findall(r"\bbagakit-[a-z0-9-]+\b", lower):
             if token == own_name:
+                continue
+            if token in NON_SKILL_BAGAKIT_TOKENS:
+                continue
+            if not any(hint in lower for hint in COUPLING_HINTS):
                 continue
             if not line_is_optional_contract(lower):
                 errors.append(
@@ -387,8 +464,18 @@ def cmd_validate(args: argparse.Namespace) -> int:
     if len(lines) > MAX_SKILL_LINES:
         errors.append(f"SKILL.md must stay within {MAX_SKILL_LINES} lines (current={len(lines)})")
 
-    if "[[BAGAKIT]]" not in skill_text:
-        errors.append("SKILL.md must define [[BAGAKIT]] footer contract")
+    is_bagakit_series = bool(name) and name.startswith("bagakit-")
+    has_bagakit_anchor = bool(re.search(r"(?m)^\[\[BAGAKIT\]\]\s*$", skill_text))
+    has_bagakit_peer_lines = bool(re.search(r"(?m)^\[\[BAGAKIT\]\]\s*\n(?:- .+\n)+", skill_text))
+    if not has_bagakit_anchor:
+        if is_bagakit_series:
+            errors.append("SKILL.md must define [[BAGAKIT]] footer contract for bagakit-* skills")
+        else:
+            warnings.append(
+                "SKILL.md has no [[BAGAKIT]] footer contract; this is fine for generic mode, but required if Bagakit profile is enabled"
+            )
+    elif is_bagakit_series and not has_bagakit_peer_lines:
+        errors.append("bagakit-* skills must keep canonical [[BAGAKIT]] format: anchor line followed by peer '- ...' lines")
     if "standalone" not in skill_text.lower():
         errors.append("SKILL.md must state standalone-first design explicitly")
     if not (
@@ -408,6 +495,60 @@ def cmd_validate(args: argparse.Namespace) -> int:
         min_count=1,
     ):
         errors.append("SKILL.md must include a fallback section with at least 1 bullet action")
+    if not section_has_bullets(
+        skill_text,
+        r"^##\s+(?:Output Routes(?: and Default Mode)?|Output Contract|Output System Contract)\s*$",
+        min_count=2,
+    ):
+        errors.append("SKILL.md must include output routes/default section with at least 2 bullet items")
+    if not section_has_bullets(
+        skill_text,
+        r"^##\s+(?:Archive Gate(?:\s*\(.*\))?|Completion Handoff(?: and Archive)?|Archive(?: and Handoff)?)\s*$",
+        min_count=1,
+    ):
+        errors.append("SKILL.md must include archive gate/hand-off section with at least 1 bullet action")
+
+    output_block = section_block(
+        skill_text, r"^##\s+(?:Output Routes(?: and Default Mode)?|Output Contract|Output System Contract)\s*$"
+    )
+    output_lower = output_block.lower() if output_block else ""
+    if output_block:
+        if "default" not in output_lower:
+            errors.append("output section must explicitly mention default route behavior")
+        has_adapter_route = any(token in output_lower for token in ADAPTER_HINTS)
+        has_no_adapter_policy = any(token in output_lower for token in NO_ADAPTER_HINTS)
+        if not (has_adapter_route or has_no_adapter_policy):
+            errors.append(
+                "output section must declare adapter policy: optional adapter routes or explicit standalone/no-adapter statement"
+            )
+        if has_adapter_route and "optional" not in output_lower and "可选" not in output_lower:
+            warnings.append("adapter routes should be marked optional to preserve standalone-first behavior")
+        if not any(token in output_lower for token in ACTION_HINTS):
+            errors.append("output section must define an action handoff output")
+        has_memory = any(token in output_lower for token in MEMORY_HINTS)
+        has_memory_none = any(token in output_lower for token in ("no memory", "none", "无沉淀", "无记忆", "无需沉淀"))
+        if not (has_memory or has_memory_none):
+            errors.append("output section must define a memory/summary handoff output (or explicit none rationale)")
+        if not any(token in output_lower for token in ("archetype", "type", "分类", "类别", "产物")):
+            warnings.append("output section should classify deliverable archetype/type")
+
+    archive_block = section_block(
+        skill_text, r"^##\s+(?:Archive Gate(?:\s*\(.*\))?|Completion Handoff(?: and Archive)?|Archive(?: and Handoff)?)\s*$"
+    )
+    archive_lower = archive_block.lower() if archive_block else ""
+    if archive_block:
+        if not any(token in archive_lower for token in ARCHIVE_HINTS):
+            errors.append("archive section must explicitly include destination path/id evidence")
+        if not any(token in archive_lower for token in ACTION_HINTS):
+            errors.append("archive section must mention action handoff destination")
+        has_archive_memory = any(token in archive_lower for token in MEMORY_HINTS)
+        has_archive_memory_none = any(
+            token in archive_lower for token in ("no memory", "none", "无沉淀", "无记忆", "无需沉淀")
+        )
+        if not (has_archive_memory or has_archive_memory_none):
+            errors.append("archive section must mention memory handoff destination (or explicit none rationale)")
+        if not any(token in archive_lower for token in ("complete", "completion", "gate", "准出", "完成")):
+            warnings.append("archive section should state completion gate conditions explicitly")
 
     errors.extend(scan_hard_coupling(skill_text, name or ""))
     runtime_errors, runtime_warnings = audit_runtime_files(skill_dir)

@@ -126,6 +126,82 @@ p.write_text(text, encoding="utf-8")
 PY
 sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$target" >/dev/null
 
+echo "[test] missing output routes section should fail"
+python3 - <<PY
+from pathlib import Path
+import re
+p = Path(r"${target}") / "SKILL.md"
+text = p.read_text(encoding="utf-8")
+text = re.sub(
+    r"\n## Output Routes and Default Mode\n(?s:.*?)(?=\n## )",
+    "\n",
+    text,
+    count=1,
+)
+p.write_text(text, encoding="utf-8")
+PY
+if sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$target" >/dev/null 2>&1; then
+  echo "[test] expected validation to fail without output routes section" >&2
+  exit 1
+fi
+
+echo "[test] restore output routes section"
+python3 - <<PY
+from pathlib import Path
+p = Path(r"${target}") / "SKILL.md"
+text = p.read_text(encoding="utf-8")
+insert = """
+## Output Routes and Default Mode
+
+- Define the output set explicitly (for example action handoff + summary/memory handoff).
+- Define default output route when no external driver exists (for example local plan-<slug>.md).
+- Define optional adapter routes for external systems (for example feat-harness, openspec, living-docs).
+- Keep route selection rule-driven and fallback-safe.
+
+"""
+text = text.replace("## Archive Gate (Completion Handoff)\n", insert + "## Archive Gate (Completion Handoff)\n", 1)
+p.write_text(text, encoding="utf-8")
+PY
+sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$target" >/dev/null
+
+echo "[test] missing archive gate section should fail"
+python3 - <<PY
+from pathlib import Path
+import re
+p = Path(r"${target}") / "SKILL.md"
+text = p.read_text(encoding="utf-8")
+text = re.sub(
+    r"\n## Archive Gate \\(Completion Handoff\\)\n(?s:.*?)(?=\n## )",
+    "\n",
+    text,
+    count=1,
+)
+p.write_text(text, encoding="utf-8")
+PY
+if sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$target" >/dev/null 2>&1; then
+  echo "[test] expected validation to fail without archive gate section" >&2
+  exit 1
+fi
+
+echo "[test] restore archive gate section"
+python3 - <<PY
+from pathlib import Path
+p = Path(r"${target}") / "SKILL.md"
+text = p.read_text(encoding="utf-8")
+insert = """
+## Archive Gate (Completion Handoff)
+
+- Every output must have a resolved destination path or id.
+- Archive must report action handoff and memory handoff destinations.
+- If adapter routes are unavailable, archive must still capture default local destinations.
+- Do not mark complete until archive evidence is written.
+
+"""
+text = text.replace("## Fallback Path (No Clear Skill Fit)\n", insert + "## Fallback Path (No Clear Skill Fit)\n", 1)
+p.write_text(text, encoding="utf-8")
+PY
+sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$target" >/dev/null
+
 echo "[test] hard coupling should fail"
 python3 - <<PY
 from pathlib import Path
@@ -151,5 +227,42 @@ text = text.replace(
 p.write_text(text, encoding="utf-8")
 PY
 sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$target" >/dev/null
+
+echo "[test] generic skill can omit [[BAGAKIT]] footer (warning only)"
+python3 - <<PY
+from pathlib import Path
+import re
+p = Path(r"${target}") / "SKILL.md"
+text = p.read_text(encoding="utf-8")
+text = re.sub(
+    r"\n## .*BAGAKIT.*Footer\n(?s:.*)\Z",
+    "\n",
+    text,
+    count=1,
+)
+p.write_text(text, encoding="utf-8")
+PY
+sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$target" >/dev/null
+
+echo "[test] bagakit-* skill must define [[BAGAKIT]] footer"
+sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" init --name "bagakit-demo" --path "$tmp" >/dev/null
+bagakit_target="${tmp}/bagakit-demo"
+python3 - <<PY
+from pathlib import Path
+import re
+p = Path(r"${bagakit_target}") / "SKILL.md"
+text = p.read_text(encoding="utf-8")
+text = re.sub(
+    r"\n## .*BAGAKIT.*Footer\n(?s:.*)\Z",
+    "\n",
+    text,
+    count=1,
+)
+p.write_text(text, encoding="utf-8")
+PY
+if sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$bagakit_target" >/dev/null 2>&1; then
+  echo "[test] expected validation to fail for bagakit-* skill without [[BAGAKIT]] footer" >&2
+  exit 1
+fi
 
 echo "[test] pass (${skill_root})"
