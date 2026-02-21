@@ -228,6 +228,29 @@ p.write_text(text, encoding="utf-8")
 PY
 sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$target" >/dev/null
 
+echo "[test] absolute path literal should fail"
+python3 - <<PY
+from pathlib import Path
+p = Path(r"${target}") / "references" / "start-here.md"
+text = p.read_text(encoding="utf-8")
+text += "\nLeaky path example: /Users/demo/private/project\n"
+p.write_text(text, encoding="utf-8")
+PY
+if sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$target" >/dev/null 2>&1; then
+  echo "[test] expected validation to fail on absolute path literal" >&2
+  exit 1
+fi
+
+echo "[test] env/relative path form should pass"
+python3 - <<PY
+from pathlib import Path
+p = Path(r"${target}") / "references" / "start-here.md"
+text = p.read_text(encoding="utf-8")
+text = text.replace("/Users/demo/private/project", "$" + "HOME/private/project")
+p.write_text(text, encoding="utf-8")
+PY
+sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$target" >/dev/null
+
 echo "[test] generic skill can omit [[BAGAKIT]] footer (warning only)"
 python3 - <<PY
 from pathlib import Path

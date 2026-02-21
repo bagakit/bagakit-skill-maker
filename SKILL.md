@@ -54,6 +54,7 @@ Build skills that are:
   - standalone-first behavior,
   - protocol format invariants (for example RFDP shape),
   - runtime payload boundaries,
+  - generated file path portability (no absolute path literals),
   - completion destination evidence.
 - If a strict gate is required regardless of who executes, and extra autonomy does not improve outcomes, escalate to programmatic validation or strict SOP.
 - Promote guidance to hard gates only when repeated production failures prove it is necessary.
@@ -77,6 +78,7 @@ Build skills that are:
 | Granularity | Multiple unrelated workflows mixed | split or merge based on shared foundation |
 | Contract coupling | Required direct call to other skill scripts | convert to optional schema/signal contract |
 | Payload boundary | runtime/dev files mixed together | trim `SKILL_PAYLOAD.json` to runtime-only payload |
+| Path portability | generated files leak local absolute paths | use relative paths or environment-variable-based paths |
 | Output/archive boundary | outputs exist but no final destination or completion gate | define output map + default route + adapter routes + archive gate |
 | Delivery archetype | unclear handoff target; completion feels subjective | classify deliverable type + define completion destinations |
 
@@ -142,6 +144,7 @@ sh scripts/bagakit_skill_maker.sh validate --skill-dir <skill-dir>
 - Ensure `SKILL_PAYLOAD.json` excludes `README.md` and only ships runtime payload.
 - Ensure cross-skill interaction is optional and schema/rule-driven, never mandatory direct flow-call.
 - Ensure `SKILL.md` keeps a bounded context budget (default hard gate: `<= 500` lines).
+- Ensure generated runtime/docs files do not contain absolute path literals; use relative/env-based paths only.
 - Ensure `SKILL.md` defines output routes + archive gate as completion criteria.
 - Ensure archive gate explicitly names action-handoff + memory-handoff destinations.
 - If Bagakit profile is enabled, ensure `[[BAGAKIT]]` footer contract exists; otherwise keep generic mode.

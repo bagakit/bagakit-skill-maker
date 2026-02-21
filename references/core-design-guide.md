@@ -88,6 +88,7 @@ Guidance pack files for this skill:
 - Never require direct flow-calls to another skill as default prerequisite.
 - Runtime payload must be explicit in `SKILL_PAYLOAD.json`.
 - `README.md` must not be in runtime payload.
+- Generated runtime/docs files must not contain local absolute path literals; prefer relative paths or env-variable forms.
 
 ## 7) Output + Archive Principle (Completion Gate)
 
@@ -167,5 +168,6 @@ Validation should fail on:
 - missing action/memory/archive handoff wording,
 - hard direct flow-call without optional contract wording,
 - payload include drift (duplicate/out-of-root/README),
+- generated files containing absolute path literals,
 - oversized `SKILL.md` (`> 500` lines),
 - ambiguous legacy/workaround runtime file names.

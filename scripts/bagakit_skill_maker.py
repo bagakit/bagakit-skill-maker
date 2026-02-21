@@ -76,6 +76,11 @@ NO_ADAPTER_HINTS = (
 )
 ALLOWED_SCRIPT_EXTENSIONS = {".sh", ".py", ".js", ".ts"}
 ALLOWED_REFERENCE_EXTENSIONS = {".md", ".txt", ".json", ".yaml", ".yml"}
+ABSOLUTE_PATH_SCAN_EXTENSIONS = {".md", ".txt", ".json", ".yaml", ".yml"}
+ABSOLUTE_POSIX_RE = re.compile(
+    r"(?<![:A-Za-z0-9_])/(?:Users|home|private|var|tmp|opt|usr|etc|mnt|Volumes|absolute)(?:/[^\s\"'`<>|]+)+"
+)
+ABSOLUTE_WINDOWS_RE = re.compile(r"(?i)\b[A-Z]:[\\/][^\s\"'`<>|]+")
 
 
 def eprint(*items: object) -> None:
@@ -117,6 +122,7 @@ description: TODO: describe what this skill does and exactly when to use it.
 - Keep this skill focused on one coherent operational job.
 - Put "when to use" trigger details in frontmatter `description`.
 - Keep the skill standalone-first.
+- Generated files should avoid absolute paths; use relative paths or env variables.
 
 ## When to Use This Skill
 
@@ -138,6 +144,7 @@ description: TODO: describe what this skill does and exactly when to use it.
 | Granularity | Scope drift across unrelated tasks | split or merge with explicit validation matrix |
 | Contract | Direct flow-calls to other skills | switch to optional rule/schema signal contract |
 | Payload | Runtime/dev files mixed | trim `SKILL_PAYLOAD.json` to runtime-only files |
+| Path portability | Generated docs/config contain local absolute paths | rewrite to relative/env-based paths |
 | Output/archive | Outputs exist without clear destination or completion gate | define default route + optional adapters + archive handoff |
 
 ## Workflow
@@ -389,6 +396,43 @@ def audit_runtime_files(skill_dir: Path) -> tuple[list[str], list[str]]:
     return errors, warnings
 
 
+def scan_absolute_path_literals(skill_dir: Path, include: list[str]) -> list[str]:
+    targets: set[Path] = set()
+
+    def add_target(path: Path) -> None:
+        if path.name == "SKILL.md" or path.suffix.lower() in ABSOLUTE_PATH_SCAN_EXTENSIONS:
+            targets.add(path)
+
+    # Always scan SKILL.md, then scan payload/runtime text files.
+    add_target(skill_dir / "SKILL.md")
+    scan_roots = include[:] if include else ["references", "agents"]
+
+    for rel in scan_roots:
+        path = skill_dir / rel
+        if not path.exists():
+            continue
+        if path.is_file():
+            add_target(path)
+            continue
+        for child in sorted(path.rglob("*")):
+            if child.is_file():
+                add_target(child)
+
+    errors: list[str] = []
+    for path in sorted(targets):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        rel = path.relative_to(skill_dir).as_posix()
+        for idx, line in enumerate(text.splitlines(), 1):
+            if ABSOLUTE_POSIX_RE.search(line) or ABSOLUTE_WINDOWS_RE.search(line):
+                errors.append(
+                    f"{rel}:{idx} contains absolute path literal; use relative paths or env variables in generated files"
+                )
+    return errors
+
+
 def cmd_validate(args: argparse.Namespace) -> int:
     skill_dir = Path(args.skill_dir).expanduser().resolve()
     errors: list[str] = []
@@ -554,6 +598,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
     runtime_errors, runtime_warnings = audit_runtime_files(skill_dir)
     errors.extend(runtime_errors)
     warnings.extend(runtime_warnings)
+    errors.extend(scan_absolute_path_literals(skill_dir, include))
 
     if "bash .bagakit/" in skill_text:
         warnings.append(

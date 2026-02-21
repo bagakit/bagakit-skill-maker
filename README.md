@@ -22,8 +22,8 @@ This skill combines:
 ## Quick Start
 
 ```bash
-sh scripts/bagakit_skill_maker.sh init --name my-skill --path /tmp --with-agents
-sh scripts/bagakit_skill_maker.sh validate --skill-dir /tmp/my-skill
+sh scripts/bagakit_skill_maker.sh init --name my-skill --path . --with-agents
+sh scripts/bagakit_skill_maker.sh validate --skill-dir ./my-skill
 ```
 
 ## Validation Gates (Final-State)
@@ -34,6 +34,7 @@ sh scripts/bagakit_skill_maker.sh validate --skill-dir /tmp/my-skill
 - standalone-first design (and `[[BAGAKIT]]` footer when Bagakit profile is enabled),
 - cross-skill exchange as optional contract/signal (no hard direct flow call),
 - runtime payload hygiene (`README.md` excluded; no duplicate/out-of-root include paths),
+- generated docs/runtime files avoid absolute path literals (use relative/env-based paths),
 - output archetype clarity (`action-handoff` + `memory-handoff` + archive destination evidence),
 - SKILL.md line budget (`<= 500`),
 - runtime naming clarity (reject generic/legacy/workaround file names).
