@@ -90,6 +90,16 @@ Guidance pack files for this skill:
 - `README.md` must not be in runtime payload.
 - Generated runtime/docs files must not contain local absolute path literals; prefer relative paths or env-variable forms.
 
+## 6.1) Metadata Contract Rule (Semantic-First)
+
+- Avoid adapter/system-specific key proliferation in machine-readable contracts.
+- Prefer semantic generic keys + parseable metadata payload:
+  - good: `driver` + `driver_meta`,
+  - avoid: `driver_ftharness` / `driver_openspec` / `driver_longrun`.
+- Keep standalone default state explicit and parseable.
+- For machine-readable metadata frontmatter embedded in Markdown artifacts, prefer TOML frontmatter (`+++`) for strict key-value parsing.
+- Keep SKILL.md header/frontmatter in YAML unless the runtime contract explicitly changes.
+
 ## 7) Output + Archive Principle (Completion Gate)
 
 Every skill should define completion using explicit output destinations.
@@ -149,6 +159,8 @@ Merge output must include:
 ## 10) Publish Checklist
 
 - frontmatter valid (`name`, `description` only, no placeholders),
+- metadata contract is semantic (avoid one-key-per-adapter),
+- machine-readable artifact frontmatter uses TOML where applicable,
 - trigger boundary clear and tested,
 - granularity decision explicit and justified,
 - payload minimal and runtime-only,
@@ -161,6 +173,7 @@ Merge output must include:
 
 Validation should fail on:
 - missing trigger semantics in frontmatter (`when/适用/用于`),
+- machine-readable metadata schema hardcodes adapter-specific key expansion where semantic generic keys are expected,
 - missing standalone-first wording,
 - missing `When to Use` / `When NOT to Use`,
 - missing fallback path,

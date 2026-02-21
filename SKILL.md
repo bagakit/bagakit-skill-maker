@@ -59,6 +59,17 @@ Build skills that are:
 - If a strict gate is required regardless of who executes, and extra autonomy does not improve outcomes, escalate to programmatic validation or strict SOP.
 - Promote guidance to hard gates only when repeated production failures prove it is necessary.
 
+## Metadata Contract Principle (Semantic-First)
+
+- Prefer semantic generic keys over workflow-specific key proliferation.
+- Bad pattern: one key per adapter/system (for example `driver_ftharness`, `driver_openspec`, `driver_longrun`).
+- Better pattern: one semantic key plus parseable metadata:
+  - `driver`: semantic token (`none` / `ftharness` / `openspec` / `longrun` / `custom`),
+  - `driver_meta`: `none` or `key=value(; key=value)*`.
+- Keep standalone defaults explicit and valid (for example `driver=none` with `driver_meta=none`).
+- For machine-readable metadata blocks embedded in Markdown artifacts, prefer TOML frontmatter (`+++`), not YAML frontmatter (`---`).
+- Exception: SKILL.md header/frontmatter stays YAML because runtime toolchains commonly expect YAML there.
+
 ## Open Discovery Principle (Avoid Closed-Door Design)
 
 - For unresolved skill problems, discovery is mandatory before implementation.
@@ -77,6 +88,7 @@ Build skills that are:
 | Trigger boundary | Over-trigger / under-trigger | sharpen frontmatter + positive/negative examples |
 | Granularity | Multiple unrelated workflows mixed | split or merge based on shared foundation |
 | Contract coupling | Required direct call to other skill scripts | convert to optional schema/signal contract |
+| Metadata contract | one key per adapter/system; hard-coded workflow fields | use semantic generic keys + parseable `*_meta`; prefer TOML frontmatter in machine-readable artifacts |
 | Payload boundary | runtime/dev files mixed together | trim `SKILL_PAYLOAD.json` to runtime-only payload |
 | Path portability | generated files leak local absolute paths | use relative paths or environment-variable-based paths |
 | Output/archive boundary | outputs exist but no final destination or completion gate | define output map + default route + adapter routes + archive gate |

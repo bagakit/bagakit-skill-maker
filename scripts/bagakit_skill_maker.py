@@ -81,6 +81,8 @@ ABSOLUTE_POSIX_RE = re.compile(
     r"(?<![:A-Za-z0-9_])/(?:Users|home|private|var|tmp|opt|usr|etc|mnt|Volumes|absolute)(?:/[^\s\"'`<>|]+)+"
 )
 ABSOLUTE_WINDOWS_RE = re.compile(r"(?i)\b[A-Z]:[\\/][^\s\"'`<>|]+")
+DISCOURAGED_ADAPTER_KEYS = ("driver_ftharness", "driver_openspec", "driver_longrun")
+ANTI_PATTERN_HINTS = ("avoid", "bad pattern", "anti-pattern", "instead of", "不要", "避免", "禁用")
 
 
 def eprint(*items: object) -> None:
@@ -143,6 +145,7 @@ description: TODO: describe what this skill does and exactly when to use it.
 | Trigger boundary | Over-trigger/under-trigger | tighten frontmatter + positive/negative examples |
 | Granularity | Scope drift across unrelated tasks | split or merge with explicit validation matrix |
 | Contract | Direct flow-calls to other skills | switch to optional rule/schema signal contract |
+| Metadata contract | one key per adapter/system; hard-coded workflow fields | use semantic generic keys + parseable `*_meta`; prefer TOML frontmatter in machine-readable artifacts |
 | Payload | Runtime/dev files mixed | trim `SKILL_PAYLOAD.json` to runtime-only files |
 | Path portability | Generated docs/config contain local absolute paths | rewrite to relative/env-based paths |
 | Output/archive | Outputs exist without clear destination or completion gate | define default route + optional adapters + archive handoff |
@@ -158,6 +161,14 @@ description: TODO: describe what this skill does and exactly when to use it.
 
 - Cross-skill interaction must stay optional.
 - Exchange only schema/contract signals; never hard-call another skill flow.
+
+## Metadata Contract Principle
+
+- Prefer semantic generic keys over workflow-specific key proliferation.
+- Avoid patterns like `driver_ftharness` / `driver_openspec` / `driver_longrun`.
+- Prefer `driver` + `driver_meta` when driver context needs machine-readable representation.
+- For machine-readable metadata blocks in Markdown artifacts, prefer TOML frontmatter (`+++`).
+- Keep SKILL.md header/frontmatter in YAML unless runtime requirements explicitly change.
 
 ## Output Routes and Default Mode
 
@@ -276,7 +287,7 @@ def cmd_init(args: argparse.Namespace) -> int:
 def parse_frontmatter(text: str) -> tuple[dict[str, str], list[str]]:
     lines = text.splitlines()
     if len(lines) < 3 or lines[0].strip() != "---":
-        return {}, ["SKILL.md must start with YAML frontmatter ('---')"]
+        return {}, ["SKILL.md must start with YAML frontmatter ('---'); TOML frontmatter guidance applies to artifact metadata blocks"]
     try:
         end = lines.index("---", 1)
     except ValueError:
@@ -354,6 +365,36 @@ def scan_hard_coupling(skill_text: str, own_name: str) -> list[str]:
                     f"line {idx}: direct call to other skill '{target_skill}' is not allowed without optional contract wording"
                 )
     return errors
+
+
+def scan_metadata_contract_signals(skill_text: str) -> list[str]:
+    warnings: list[str] = []
+    lower = skill_text.lower()
+
+    found_discouraged: list[str] = []
+    for line in skill_text.splitlines():
+        line_lower = line.lower()
+        if any(hint in line_lower for hint in ANTI_PATTERN_HINTS):
+            continue
+        for key in DISCOURAGED_ADAPTER_KEYS:
+            if key in line_lower:
+                found_discouraged.append(key)
+
+    unique_discouraged = sorted(set(found_discouraged))
+    if unique_discouraged:
+        warnings.append(
+            "metadata contract may be over-coupled: found adapter-specific keys "
+            f"{', '.join(unique_discouraged)}; prefer semantic keys like driver + driver_meta"
+        )
+        if "driver_meta" not in lower or "driver" not in lower:
+            warnings.append("metadata contract should document semantic generic key + parseable meta pattern")
+
+    if "machine-readable" in lower and "frontmatter" in lower and "toml" not in lower:
+        warnings.append(
+            "machine-readable frontmatter detected without TOML wording; prefer TOML frontmatter (`+++`) in artifacts"
+        )
+
+    return warnings
 
 
 def audit_runtime_files(skill_dir: Path) -> tuple[list[str], list[str]]:
@@ -595,6 +636,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
             warnings.append("archive section should state completion gate conditions explicitly")
 
     errors.extend(scan_hard_coupling(skill_text, name or ""))
+    warnings.extend(scan_metadata_contract_signals(skill_text))
     runtime_errors, runtime_warnings = audit_runtime_files(skill_dir)
     errors.extend(runtime_errors)
     warnings.extend(runtime_warnings)
