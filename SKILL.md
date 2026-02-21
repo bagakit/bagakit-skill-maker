@@ -89,6 +89,7 @@ Build skills that are:
 | Granularity | Multiple unrelated workflows mixed | split or merge based on shared foundation |
 | Contract coupling | Required direct call to other skill scripts | convert to optional schema/signal contract |
 | Metadata contract | one key per adapter/system; hard-coded workflow fields | use semantic generic keys + parseable `*_meta`; prefer TOML frontmatter in machine-readable artifacts |
+| Capability layering | macro/process/tool/micro boundary is unclear | classify into macro-process, macro-tool, or micro-pack and choose the right host repo |
 | Payload boundary | runtime/dev files mixed together | trim `SKILL_PAYLOAD.json` to runtime-only payload |
 | Packaging contract | `package-skill` outputs unstable/non-deterministic path | enforce `<DIST_DIR>/<SKILL_NAME>.skill`, support `DIST_DIR` override |
 | Path portability | generated files leak local absolute paths | use relative paths or environment-variable-based paths |
@@ -119,6 +120,9 @@ Build skills that are:
 - Keep one skill focused on one operational job. Split if triggers diverge.
 - If user asks to improve one existing skill, keep compatible semantics but remove ambiguity and redundant instructions.
 - If user asks to merge multiple skills, combine overlapping workflows into one portable skill with clear sections and one validation contract.
+- Decide capability layer and hosting:
+  - `macro-process` / `macro-tool`: can be considered for core meta-repo onboarding.
+  - `micro-pack`: should be grouped into domain packs; avoid one-repo-per-micro-skill in core.
 
 3) Classify deliverable archetype and output routes.
 - Decide the skill's primary deliverable archetype (for example execution/result-heavy, process-driver, memory/governance).
