@@ -3,7 +3,7 @@
   "include": [
     "SKILL.md",
     "agents",
-    "references",
+    "reference",
     "scripts"
   ]
 }

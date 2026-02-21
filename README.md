@@ -10,7 +10,8 @@ This skill combines:
 
 ## What it does
 
-- Scaffold a new skill folder with `SKILL.md`, `SKILL_PAYLOAD.json`, `scripts/`, `references/` (optional `agents/`).
+- Scaffold a new skill folder with `SKILL.md`, `SKILL_PAYLOAD.json`, `scripts/`, `reference/` (optional `agents/`).
+- Keep reference layout clean: docs in `reference/`, templates in `reference/tpl/`.
 - Validate frontmatter, payload boundaries, and contract policy violations.
 - Promote semantic metadata contracts (avoid system-specific key proliferation such as `driver_*`; prefer generic keys like `driver` + `driver_meta`).
 - Prefer TOML frontmatter (`+++`) for machine-readable metadata blocks in generated Markdown artifacts.
@@ -38,6 +39,7 @@ sh scripts/bagakit_skill_maker.sh validate --skill-dir ./my-skill
 - standalone-first design (and `[[BAGAKIT]]` footer when Bagakit profile is enabled),
 - cross-skill exchange as optional contract/signal (no hard direct flow call),
 - runtime payload hygiene (`README.md` excluded; no duplicate/out-of-root include paths),
+- reference layout guidance (`reference/` docs + `reference/tpl/` templates; legacy `references/` flagged),
 - generated docs/runtime files avoid absolute path literals (use relative/env-based paths),
 - output archetype clarity (`action-handoff` + `memory-handoff` + archive destination evidence),
 - SKILL.md line budget (`<= 500`),
@@ -45,9 +47,9 @@ sh scripts/bagakit_skill_maker.sh validate --skill-dir ./my-skill
 
 ## References
 
-- `references/core-design-guide.md` (portable core rules)
-- `references/bagakit-profile-guide.md` (Bagakit overlay rules)
-- `references/skill-discovery-sources.md` (search-first discovery; standalone with optional ecosystem accelerators)
-- `references/guidance-pack-patterns.md`
-- `references/guidance-pack-anti-patterns.md`
-- `references/guidance-pack-examples.md`
+- `reference/core-design-guide.md` (portable core rules)
+- `reference/bagakit-profile-guide.md` (Bagakit overlay rules)
+- `reference/skill-discovery-sources.md` (search-first discovery; standalone with optional ecosystem accelerators)
+- `reference/guidance-pack-patterns.md`
+- `reference/guidance-pack-anti-patterns.md`
+- `reference/guidance-pack-examples.md`

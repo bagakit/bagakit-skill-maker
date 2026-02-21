@@ -1,6 +1,6 @@
 ---
 name: bagakit-skill-maker
-description: Create, improve, merge, or refactor portable skills with Bagakit-friendly defaults. Use when you need to scaffold a new skill repo, tighten trigger boundaries, split SKILL.md into scripts/references for progressive disclosure, enforce standalone-first contract rules, or validate runtime payload boundaries.
+description: Create, improve, merge, or refactor portable skills with Bagakit-friendly defaults. Use when you need to scaffold a new skill repo, tighten trigger boundaries, split SKILL.md into scripts/reference/tpl layers for progressive disclosure, enforce standalone-first contract rules, or validate runtime payload boundaries.
 ---
 
 # Bagakit Skill Maker
@@ -70,10 +70,16 @@ Build skills that are:
 - For machine-readable metadata blocks embedded in Markdown artifacts, prefer TOML frontmatter (`+++`), not YAML frontmatter (`---`).
 - Exception: SKILL.md header/frontmatter stays YAML because runtime toolchains commonly expect YAML there.
 
+## Reference Layout Principle
+
+- Keep reference docs in `reference/`.
+- Keep reusable templates in `reference/tpl/`.
+- Avoid mixing templates into general docs; keep intent boundary clear for retrieval.
+
 ## Open Discovery Principle (Avoid Closed-Door Design)
 
 - For unresolved skill problems, discovery is mandatory before implementation.
-- Use `references/skill-discovery-sources.md` as the default discovery playbook:
+- Use `reference/skill-discovery-sources.md` as the default discovery playbook:
   1. define keyword sets,
   2. search ordered source layers,
   3. compare at least three candidates from the discovery yellow pages,
@@ -100,7 +106,7 @@ Build skills that are:
 
 0) Search-first discovery before creation/improvement.
 - Do not start implementation immediately for unresolved problems.
-- Use `references/skill-discovery-sources.md` as the default discovery path.
+- Use `reference/skill-discovery-sources.md` as the default discovery path.
 - Do not assume any specific discovery skill/CLI is installed; keep discovery flow standalone.
 - Search in this order:
   1. project-local docs/contracts and known skill catalogs first,
@@ -143,7 +149,7 @@ Build skills that are:
 
 5) Plan progressive disclosure.
 - Keep SKILL.md as an execution map, not a giant handbook.
-- Move deep details into `references/`.
+- Move deep details into `reference/`.
 - Put deterministic/fragile steps into executable scripts under `scripts/`.
 
 6) Scaffold and edit.
@@ -151,7 +157,7 @@ Build skills that are:
 ```bash
 sh scripts/bagakit_skill_maker.sh init --name <skill-name> --path <output-dir> [--with-agents]
 ```
-- Fill generated SKILL.md/references/scripts with project-specific content.
+- Fill generated `SKILL.md`, `reference/`, `reference/tpl/`, and `scripts/` with project-specific content.
 
 7) Enforce core constraints + Bagakit profile defaults.
 - Run:
@@ -170,7 +176,7 @@ sh scripts/bagakit_skill_maker.sh validate --skill-dir <skill-dir>
 8) Iterate from production misses.
 - If over-triggering: narrow frontmatter description with stronger boundaries.
 - If under-triggering: add concrete trigger phrases and file/task examples.
-- Promote repeated manual fixes into scripts or references.
+- Promote repeated manual fixes into scripts or reference docs/templates.
 - If granularity drifts, trigger split/merge with an explicit improve plan + verification matrix.
 
 9) Project-local evolution.
@@ -208,13 +214,13 @@ sh scripts/bagakit_skill_maker.sh validate --skill-dir <skill-dir>
 
 ## Design Guide
 
-- Use progressive references:
-  - `references/core-design-guide.md` (portable core rules; always apply)
-  - `references/bagakit-profile-guide.md` (Bagakit profile overlay; required for `bagakit-*`)
-  - `references/skill-discovery-sources.md` (search-first sources and strategy)
-  - `references/guidance-pack-patterns.md` (recommended output/archive patterns)
-  - `references/guidance-pack-anti-patterns.md` (what to avoid)
-  - `references/guidance-pack-examples.md` (copy-ready examples)
+- Use progressive reference docs/templates:
+  - `reference/core-design-guide.md` (portable core rules; always apply)
+  - `reference/bagakit-profile-guide.md` (Bagakit profile overlay; required for `bagakit-*`)
+  - `reference/skill-discovery-sources.md` (search-first sources and strategy)
+  - `reference/guidance-pack-patterns.md` (recommended output/archive patterns)
+  - `reference/guidance-pack-anti-patterns.md` (what to avoid)
+  - `reference/guidance-pack-examples.md` (copy-ready examples)
 - For generic/non-Bagakit skills, apply core guide only.
 
 ## `[[BAGAKIT]]` RFDP (Response Footer Driven Protocol)

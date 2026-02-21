@@ -83,6 +83,9 @@ ABSOLUTE_POSIX_RE = re.compile(
 ABSOLUTE_WINDOWS_RE = re.compile(r"(?i)\b[A-Z]:[\\/][^\s\"'`<>|]+")
 DISCOURAGED_ADAPTER_KEYS = ("driver_ftharness", "driver_openspec", "driver_longrun")
 ANTI_PATTERN_HINTS = ("avoid", "bad pattern", "anti-pattern", "instead of", "不要", "避免", "禁用")
+REFERENCE_DIR_CANONICAL = "reference"
+REFERENCE_DIR_LEGACY = "references"
+REFERENCE_DIR_ALIASES = (REFERENCE_DIR_CANONICAL, REFERENCE_DIR_LEGACY)
 
 
 def eprint(*items: object) -> None:
@@ -125,6 +128,7 @@ description: TODO: describe what this skill does and exactly when to use it.
 - Put "when to use" trigger details in frontmatter `description`.
 - Keep the skill standalone-first.
 - Generated files should avoid absolute paths; use relative paths or env variables.
+- Keep references organized: docs under `reference/`, templates under `reference/tpl/`.
 
 ## When to Use This Skill
 
@@ -153,7 +157,7 @@ description: TODO: describe what this skill does and exactly when to use it.
 ## Workflow
 
 1. Capture concrete triggering and non-triggering examples.
-2. Keep SKILL.md concise; move deep material to references.
+2. Keep SKILL.md concise; move deep material to `reference/` and templates to `reference/tpl/`.
 3. Put deterministic/fragile repeatable steps into scripts.
 4. Validate and iterate based on over-trigger/under-trigger behavior.
 
@@ -169,6 +173,12 @@ description: TODO: describe what this skill does and exactly when to use it.
 - Prefer `driver` + `driver_meta` when driver context needs machine-readable representation.
 - For machine-readable metadata blocks in Markdown artifacts, prefer TOML frontmatter (`+++`).
 - Keep SKILL.md header/frontmatter in YAML unless runtime requirements explicitly change.
+
+## Reference Layout
+
+- Put explanatory docs and guides under `reference/`.
+- Put reusable templates under `reference/tpl/`.
+- Avoid mixing templates into generic docs to keep reference hierarchy clean.
 
 ## Output Routes and Default Mode
 
@@ -256,12 +266,12 @@ def cmd_init(args: argparse.Namespace) -> int:
         eprint(f"error: target directory already exists: {skill_dir}")
         return 1
 
-    includes = ["SKILL.md", "references", "scripts"]
+    includes = ["SKILL.md", REFERENCE_DIR_CANONICAL, "scripts"]
     if args.with_agents:
         includes.append("agents")
 
     skill_dir.mkdir(parents=True, exist_ok=False)
-    (skill_dir / "references").mkdir(parents=True, exist_ok=True)
+    (skill_dir / REFERENCE_DIR_CANONICAL / "tpl").mkdir(parents=True, exist_ok=True)
     (skill_dir / "scripts").mkdir(parents=True, exist_ok=True)
 
     write_text(skill_dir / "SKILL.md", build_skill_md(name))
@@ -270,8 +280,12 @@ def cmd_init(args: argparse.Namespace) -> int:
         json.dumps({"version": 1, "include": includes}, indent=2, ensure_ascii=False) + "\n",
     )
     write_text(
-        skill_dir / "references" / "start-here.md",
+        skill_dir / REFERENCE_DIR_CANONICAL / "start-here.md",
         "# Start Here\n\nAdd reference docs that are too detailed for SKILL.md.\n",
+    )
+    write_text(
+        skill_dir / REFERENCE_DIR_CANONICAL / "tpl" / "template-note.md",
+        "# Template Note\n\nPut reusable markdown/json templates in this folder.\n",
     )
 
     if args.with_agents:
@@ -341,6 +355,12 @@ def section_block(skill_text: str, heading_re: str) -> str | None:
     return tail[: next_heading.start()] if next_heading else tail
 
 
+def detect_reference_layout(skill_dir: Path) -> tuple[bool, bool]:
+    has_canonical = (skill_dir / REFERENCE_DIR_CANONICAL).exists()
+    has_legacy = (skill_dir / REFERENCE_DIR_LEGACY).exists()
+    return has_canonical, has_legacy
+
+
 def scan_hard_coupling(skill_text: str, own_name: str) -> list[str]:
     errors: list[str] = []
     for idx, line in enumerate(skill_text.splitlines(), 1):
@@ -402,7 +422,8 @@ def audit_runtime_files(skill_dir: Path) -> tuple[list[str], list[str]]:
     warnings: list[str] = []
     runtime_dirs = {
         "scripts": ALLOWED_SCRIPT_EXTENSIONS,
-        "references": ALLOWED_REFERENCE_EXTENSIONS,
+        REFERENCE_DIR_CANONICAL: ALLOWED_REFERENCE_EXTENSIONS,
+        REFERENCE_DIR_LEGACY: ALLOWED_REFERENCE_EXTENSIONS,
     }
 
     for dirname, allowed_ext in runtime_dirs.items():
@@ -446,7 +467,7 @@ def scan_absolute_path_literals(skill_dir: Path, include: list[str]) -> list[str
 
     # Always scan SKILL.md, then scan payload/runtime text files.
     add_target(skill_dir / "SKILL.md")
-    scan_roots = include[:] if include else ["references", "agents"]
+    scan_roots = include[:] if include else [REFERENCE_DIR_CANONICAL, REFERENCE_DIR_LEGACY, "agents"]
 
     for rel in scan_roots:
         path = skill_dir / rel
@@ -525,6 +546,8 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
     if include:
         include_set = set(include)
+        has_reference_canonical, has_reference_legacy = detect_reference_layout(skill_dir)
+        has_reference_include = any(item in include_set for item in REFERENCE_DIR_ALIASES)
         if len(include_set) != len(include):
             errors.append("SKILL_PAYLOAD.json include contains duplicate items")
         if "SKILL.md" not in include_set:
@@ -537,13 +560,30 @@ def cmd_validate(args: argparse.Namespace) -> int:
                 continue
             if not (skill_dir / path).exists():
                 errors.append(f"payload path missing on disk: {path}")
-        for runtime_dir in ("scripts", "references", "agents"):
+        for runtime_dir in ("scripts", "agents"):
             exists = (skill_dir / runtime_dir).exists()
             has = runtime_dir in include_set
             if exists and not has:
                 warnings.append(f"directory exists but not included in payload: {runtime_dir}")
             if has and not exists:
                 errors.append(f"payload includes missing directory: {runtime_dir}")
+
+        if (has_reference_canonical or has_reference_legacy) and not has_reference_include:
+            warnings.append(
+                f"directory exists but not included in payload: {REFERENCE_DIR_CANONICAL}/{REFERENCE_DIR_LEGACY}"
+            )
+        if REFERENCE_DIR_CANONICAL in include_set and not has_reference_canonical:
+            errors.append(f"payload includes missing directory: {REFERENCE_DIR_CANONICAL}")
+        if REFERENCE_DIR_LEGACY in include_set and not has_reference_legacy:
+            errors.append(f"payload includes missing directory: {REFERENCE_DIR_LEGACY}")
+        if has_reference_canonical and not (skill_dir / REFERENCE_DIR_CANONICAL / "tpl").is_dir():
+            warnings.append("reference layout should include reference/tpl for reusable templates")
+        if has_reference_legacy and not has_reference_canonical:
+            warnings.append("legacy references/ layout detected; prefer reference/ with reference/tpl")
+        if has_reference_canonical and has_reference_legacy:
+            warnings.append(
+                "both reference/ and references/ exist; prefer one canonical layout (reference/ + reference/tpl)"
+            )
 
     lines = skill_text.splitlines()
     if len(lines) > MAX_SKILL_LINES:

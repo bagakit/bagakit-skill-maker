@@ -36,7 +36,7 @@ Also require:
 Before creating/improving/merging a skill for an unresolved problem:
 
 1. Search first; do not jump directly to implementation.
-2. Use `references/skill-discovery-sources.md` as the default standalone discovery playbook.
+2. Use `reference/skill-discovery-sources.md` as the default standalone discovery playbook.
 3. Think in keyword sets (domain terms, task terms, synonym terms) before searching.
 4. Source order:
    - project-local docs/contracts/catalogs,
@@ -52,13 +52,19 @@ Before creating/improving/merging a skill for an unresolved problem:
 ## 5) Progressive Disclosure
 
 - Keep `SKILL.md` concise and execution-oriented.
-- Put deep material in `references/`.
+- Put deep material in `reference/`.
+- Put reusable templates in `reference/tpl/`.
 - Put deterministic repeatable work in `scripts/`.
 
 Rule of thumb:
 - high freedom -> text guidance,
 - medium freedom -> structured steps/pseudocode,
 - low freedom -> executable scripts.
+
+Reference layout rule:
+- `reference/`: explanatory docs, guides, rationale.
+- `reference/tpl/`: reusable templates/examples.
+- Avoid mixing templates into generic docs.
 
 ## 5.1) Constraint Budget (Guidance-First)
 
@@ -77,9 +83,9 @@ Rules:
 - Promote guidance into hard gates only after repeated production failures of the same pattern.
 
 Guidance pack files for this skill:
-- `references/guidance-pack-patterns.md`
-- `references/guidance-pack-anti-patterns.md`
-- `references/guidance-pack-examples.md`
+- `reference/guidance-pack-patterns.md`
+- `reference/guidance-pack-anti-patterns.md`
+- `reference/guidance-pack-examples.md`
 
 ## 6) Core Contract Rules
 
@@ -161,6 +167,7 @@ Merge output must include:
 - frontmatter valid (`name`, `description` only, no placeholders),
 - metadata contract is semantic (avoid one-key-per-adapter),
 - machine-readable artifact frontmatter uses TOML where applicable,
+- reference layout is clean (`reference/` docs + `reference/tpl/` templates),
 - trigger boundary clear and tested,
 - granularity decision explicit and justified,
 - payload minimal and runtime-only,

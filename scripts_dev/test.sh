@@ -19,6 +19,8 @@ target="${tmp}/demo-skill"
 [[ -f "${target}/SKILL.md" ]]
 [[ -f "${target}/SKILL_PAYLOAD.json" ]]
 [[ -f "${target}/agents/openai.yaml" ]]
+[[ -f "${target}/reference/start-here.md" ]]
+[[ -f "${target}/reference/tpl/template-note.md" ]]
 
 echo "[test] payload policy"
 python3 - <<PY
@@ -29,7 +31,7 @@ data = json.loads(p.read_text(encoding="utf-8"))
 inc = set(data.get("include", []))
 if "README.md" in inc:
     raise SystemExit("README.md must not be in payload include")
-for req in ("SKILL.md", "scripts", "references"):
+for req in ("SKILL.md", "scripts", "reference"):
     if req not in inc:
         raise SystemExit(f"missing payload item: {req}")
 PY
@@ -231,7 +233,7 @@ sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$target
 echo "[test] absolute path literal should fail"
 python3 - <<PY
 from pathlib import Path
-p = Path(r"${target}") / "references" / "start-here.md"
+p = Path(r"${target}") / "reference" / "start-here.md"
 text = p.read_text(encoding="utf-8")
 text += "\nLeaky path example: /Users/demo/private/project\n"
 p.write_text(text, encoding="utf-8")
@@ -244,7 +246,7 @@ fi
 echo "[test] env/relative path form should pass"
 python3 - <<PY
 from pathlib import Path
-p = Path(r"${target}") / "references" / "start-here.md"
+p = Path(r"${target}") / "reference" / "start-here.md"
 text = p.read_text(encoding="utf-8")
 text = text.replace("/Users/demo/private/project", "$" + "HOME/private/project")
 p.write_text(text, encoding="utf-8")
