@@ -51,12 +51,14 @@ Build skills that are:
 
 - For high-ceiling agent workflows, prefer guidance and examples over heavy structured schema constraints.
 - If the work should be performed similarly by both agents and humans, and quality is mostly achieved by clear standards/examples, use a guidance pack.
+- For qualitative dimensions (for example clarification depth, argument quality, forum rigor, narrative quality), use prompt rubrics + coding-agent review, not script pass/fail checks.
 - Use programmatic gates only for hard invariants:
   - standalone-first behavior,
   - protocol format invariants (for example RFDP shape),
   - runtime payload boundaries,
   - generated file path portability (no absolute path literals),
   - completion destination evidence.
+- Script validation should verify objective invariants and destination evidence only; qualitative quality should be reviewed through prompts/checklists.
 - If a strict gate is required regardless of who executes, and extra autonomy does not improve outcomes, escalate to programmatic validation or strict SOP.
 - Promote guidance to hard gates only when repeated production failures prove it is necessary.
 
@@ -173,6 +175,7 @@ sh scripts/bagakit_skill_maker.sh validate --skill-dir <skill-dir>
 - Ensure generated runtime/docs files do not contain absolute path literals; use relative/env-based paths only.
 - Ensure `SKILL.md` defines output routes + archive gate as completion criteria.
 - Ensure archive gate explicitly names action-handoff + memory-handoff destinations.
+- Ensure qualitative quality checks are defined as prompt rubrics/checklists (agent-reviewed), not script-enforced pass/fail metrics.
 - If Bagakit profile is enabled, ensure `[[BAGAKIT]]` footer contract exists; otherwise keep generic mode.
 
 8) Iterate from production misses.

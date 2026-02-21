@@ -183,6 +183,11 @@ description: TODO: describe what this skill does and exactly when to use it.
 3. Put deterministic/fragile repeatable steps into scripts.
 4. Validate and iterate based on over-trigger/under-trigger behavior.
 
+## Quality Validation Strategy
+
+- Qualitative quality (for example clarification depth, discussion rigor, writing quality) should be defined as prompt rubrics/checklists and reviewed by a coding agent/human.
+- Script checks should validate objective invariants only (format, required sections, output destinations, path/runtime contracts).
+
 ## Cross-Skill Contract
 
 - Cross-skill interaction must stay optional.

@@ -60,3 +60,17 @@ Risk:
 
 Fix:
 - convert to optional contract/signal model + fallback route.
+
+## Anti-Pattern 6: Script-Scoring Qualitative Reasoning
+
+Symptoms:
+- scripts attempt to pass/fail "discussion depth", "question quality", "argument rigor", "writing quality"
+- validator relies on brittle keyword counts as a quality proxy
+
+Risk:
+- false confidence and prompt gaming
+- high maintenance with low real signal
+
+Fix:
+- move qualitative checks into prompt rubrics and agent review steps,
+- keep scripts focused on objective invariants and destination evidence.

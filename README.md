@@ -16,6 +16,7 @@ This skill combines:
 - Promote semantic metadata contracts (avoid system-specific key proliferation such as `driver_*`; prefer generic keys like `driver` + `driver_meta`).
 - Prefer TOML frontmatter (`+++`) for machine-readable metadata blocks in generated Markdown artifacts.
 - Keep a guidance-first constraint budget: gate only hard invariants, avoid over-constraining reasoning with heavy schema.
+- Keep qualitative quality checks prompt-first: use rubric/checklist prompts reviewed by coding agents (or humans), not script pass/fail.
 - Guide keep/split/merge decisions so each skill keeps clear boundaries instead of becoming a toolbox.
 - Enforce output-route + archive best practice (deliverable archetype, default route, optional adapters or standalone-only declaration, completion archive gate).
 - Emphasize capability/contract-driven routing over concrete system-name routing; concrete mappings stay in optional profile examples.
@@ -46,6 +47,8 @@ sh scripts/bagakit_skill_maker.sh validate --skill-dir ./my-skill
 - name-bound routing risk warnings (prefer generic adapter classes; fallback when external driver is unusable),
 - SKILL.md line budget (`<= 500`),
 - runtime naming clarity (reject generic/legacy/workaround file names).
+
+`validate` intentionally does **not** score qualitative reasoning depth (for example discussion quality or writing quality); those should be specified as prompt requirements and reviewed by a coding agent/human.
 
 ## References
 

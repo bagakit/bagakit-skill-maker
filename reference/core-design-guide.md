@@ -73,11 +73,16 @@ For high-ceiling agent workflows, do not overfit behavior into rigid schema too 
 Rules:
 - Prefer guidance + examples first.
 - If both agents and humans should execute in roughly the same way, and quality depends on clear standards with low creative variance, use a guidance pack.
+- Treat qualitative reasoning quality as prompt-reviewed:
+  - Examples: clarification depth, option quality, debate rigor, writing quality.
+  - Encode these as explicit prompt rubrics/checklists in SKILL/reference templates.
+  - Do not enforce these qualitative dimensions as script pass/fail tests.
 - Add programmatic gates only for hard invariants that are expensive to recover:
   - standalone-first behavior,
   - protocol shape (for example RFDP format),
   - runtime payload boundary,
   - completion destination evidence.
+- Script tests should remain objective: file/protocol invariants, parseability, and destination evidence.
 - Do not force heavy structured fields for domain reasoning if agents can handle it better via guidance.
 - If strict gate behavior is required regardless of operator, and autonomy brings no meaningful quality gain, enforce programmatic validation or strict SOP.
 - Promote guidance into hard gates only after repeated production failures of the same pattern.
