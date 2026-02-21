@@ -90,6 +90,7 @@ Build skills that are:
 | Contract coupling | Required direct call to other skill scripts | convert to optional schema/signal contract |
 | Metadata contract | one key per adapter/system; hard-coded workflow fields | use semantic generic keys + parseable `*_meta`; prefer TOML frontmatter in machine-readable artifacts |
 | Payload boundary | runtime/dev files mixed together | trim `SKILL_PAYLOAD.json` to runtime-only payload |
+| Packaging contract | `package-skill` outputs unstable/non-deterministic path | enforce `<DIST_DIR>/<SKILL_NAME>.skill`, support `DIST_DIR` override |
 | Path portability | generated files leak local absolute paths | use relative paths or environment-variable-based paths |
 | Output/archive boundary | outputs exist but no final destination or completion gate | define output map + default route + adapter routes + archive gate |
 | Delivery archetype | unclear handoff target; completion feels subjective | classify deliverable type + define completion destinations |
@@ -156,6 +157,7 @@ sh scripts/bagakit_skill_maker.sh validate --skill-dir <skill-dir>
 - Ensure `SKILL_PAYLOAD.json` excludes `README.md` and only ships runtime payload.
 - Ensure cross-skill interaction is optional and schema/rule-driven, never mandatory direct flow-call.
 - Ensure `SKILL.md` keeps a bounded context budget (default hard gate: `<= 500` lines).
+- Ensure `Makefile package-skill` honors `DIST_DIR` and emits artifact at `<DIST_DIR>/<SKILL_NAME>.skill`.
 - Ensure generated runtime/docs files do not contain absolute path literals; use relative/env-based paths only.
 - Ensure `SKILL.md` defines output routes + archive gate as completion criteria.
 - Ensure archive gate explicitly names action-handoff + memory-handoff destinations.
