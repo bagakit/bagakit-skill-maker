@@ -18,6 +18,7 @@ This skill combines:
 - Keep a guidance-first constraint budget: gate only hard invariants, avoid over-constraining reasoning with heavy schema.
 - Guide keep/split/merge decisions so each skill keeps clear boundaries instead of becoming a toolbox.
 - Enforce output-route + archive best practice (deliverable archetype, default route, optional adapters or standalone-only declaration, completion archive gate).
+- Emphasize capability/contract-driven routing over concrete system-name routing; concrete mappings stay in optional profile examples.
 - Provide guidance packs (patterns / anti-patterns / examples) before escalating to heavier gate logic.
 - Offer Bagakit ecosystem mappings as optional examples, not hard requirements.
 - Support project-local evolution by improving/merging/replacing with upstream best versions under explicit validation.
@@ -42,6 +43,7 @@ sh scripts/bagakit_skill_maker.sh validate --skill-dir ./my-skill
 - reference layout guidance (`reference/` docs + `reference/tpl/` templates; legacy `references/` flagged),
 - generated docs/runtime files avoid absolute path literals (use relative/env-based paths),
 - output archetype clarity (`action-handoff` + `memory-handoff` + archive destination evidence),
+- name-bound routing risk warnings (prefer generic adapter classes; fallback when external driver is unusable),
 - SKILL.md line budget (`<= 500`),
 - runtime naming clarity (reject generic/legacy/workaround file names).
 

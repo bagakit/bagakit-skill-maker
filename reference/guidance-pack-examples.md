@@ -31,10 +31,14 @@ Copy and adapt these snippets.
 - Archetype: execution-result-heavy
 - action-handoff:
   - default: local `plan-<slug>.md`
-  - optional adapters: feat-task-harness / openspec
+  - optional adapter classes: task-driver / spec-system
 - memory-handoff:
   - default: local summary
-  - optional adapter: living-docs inbox
+  - optional adapter class: memory-system
+- Bagakit profile optional mappings:
+  - task-driver -> feat-task-harness
+  - spec-system -> openspec
+  - memory-system -> living-docs inbox
 - archive: `.bagakit/<skill>/archive/<date>-<slug>/archive.md`
 ```
 

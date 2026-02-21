@@ -43,7 +43,10 @@ Bagakit profile is optional for generic skills.
 
 - Map generic adapters to concrete systems only as optional routes.
 - Use system-agnostic contract names first, then Bagakit example mappings.
+- Keep core routing logic generic: resolve adapter class/capability first, then apply profile mapping.
+- If profile mapping is missing/unresolved, fallback to default local route.
 - Do not hardcode direct required calls to other skill scripts.
+- Do not encode core route priority directly by concrete system names.
 
 Example mapping style:
 

@@ -44,6 +44,7 @@ Build skills that are:
 - Core output should stay portable and system-agnostic.
 - Bagakit profile is an optional compatibility layer that can map generic contracts to concrete Bagakit systems.
 - Do not assume any concrete Bagakit skill is installed unless explicitly detected or requested.
+- Core routing/detection should use generic adapter classes and contract capability checks, not concrete system-name checks.
 - If target skill is a Bagakit-series skill (`name` starts with `bagakit-`), Bagakit profile is required (for example `[[BAGAKIT]]` footer contract).
 
 ## Constraint Budget (Guidance-First)
@@ -64,7 +65,7 @@ Build skills that are:
 - Prefer semantic generic keys over workflow-specific key proliferation.
 - Bad pattern: one key per adapter/system (for example `driver_ftharness`, `driver_openspec`, `driver_longrun`).
 - Better pattern: one semantic key plus parseable metadata:
-  - `driver`: semantic token (`none` / `ftharness` / `openspec` / `longrun` / `custom`),
+  - `driver`: semantic token (`none` / `task-driver` / `spec-system` / `memory-system` / `custom`),
   - `driver_meta`: `none` or `key=value(; key=value)*`.
 - Keep standalone defaults explicit and valid (for example `driver=none` with `driver_meta=none`).
 - For machine-readable metadata blocks embedded in Markdown artifacts, prefer TOML frontmatter (`+++`), not YAML frontmatter (`---`).
@@ -141,9 +142,10 @@ Build skills that are:
 
 4) Define output routes and completion archive gate.
 - Define what outputs this skill produces (at least one action/output artifact + one summary/memory artifact when applicable).
-- Define default output route when no external driver is detected.
+- Define default output route when no external driver is usable (not detected / unresolved / invalid contract).
 - Define optional adapter routes for external systems (for example task driver / spec system / memory system), and keep them optional.
 - If Bagakit profile is enabled, document concrete adapter mapping as optional examples only.
+- Route selection must be capability/contract-driven; avoid name-bound routing like "if feat-harness then ... else if openspec ...".
 - Reuse guidance pack checklists/examples before adding any new hard schema constraints.
 - Define archive gate: every output must have an explicit destination path/id before task can be marked complete.
 
@@ -197,10 +199,10 @@ sh scripts/bagakit_skill_maker.sh validate --skill-dir <skill-dir>
   - `action-handoff` (default destination + optional adapter destinations)
   - `memory-handoff` (default destination + optional adapter destinations, or explicit `none` rationale)
   - `archive` (location for completion evidence)
-- Define a default route when no external driver exists (for example local `plan-<topic>.md` / `summary-<topic>.md`).
+- Define a default route when no external driver is usable (for example local `plan-<topic>.md` / `summary-<topic>.md`).
 - Define optional adapter routes for external systems (for example task driver / spec system / memory system), or explicitly state `standalone-only/no-adapter`.
 - If needed, add a Bagakit profile subsection that maps generic routes to concrete systems as optional examples.
-- Ensure routing is rule-driven and fallback-safe, never hard-coupled.
+- Ensure routing is rule-driven and fallback-safe, never hard-coupled or concrete-name-bound.
 
 ## Archive Gate (Completion Handoff)
 

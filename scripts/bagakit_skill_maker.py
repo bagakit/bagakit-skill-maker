@@ -64,6 +64,28 @@ ADAPTER_HINTS = (
     "system",
     "联动",
 )
+GENERIC_ADAPTER_HINTS = (
+    "task driver",
+    "task-driver",
+    "spec system",
+    "spec-system",
+    "memory system",
+    "memory-system",
+    "adapter class",
+    "capability",
+    "contract-driven",
+    "rule-driven",
+    "name-bound",
+    "系统无关",
+    "能力",
+    "契约",
+)
+CONCRETE_ADAPTER_HINTS = (
+    "feat-harness",
+    "feat-task-harness",
+    "openspec",
+    "living-docs",
+)
 NO_ADAPTER_HINTS = (
     "no adapter",
     "no external",
@@ -171,6 +193,7 @@ description: TODO: describe what this skill does and exactly when to use it.
 - Prefer semantic generic keys over workflow-specific key proliferation.
 - Avoid patterns like `driver_ftharness` / `driver_openspec` / `driver_longrun`.
 - Prefer `driver` + `driver_meta` when driver context needs machine-readable representation.
+- Keep driver values semantic (for example `none` / `task-driver` / `spec-system` / `memory-system` / `custom`).
 - For machine-readable metadata blocks in Markdown artifacts, prefer TOML frontmatter (`+++`).
 - Keep SKILL.md header/frontmatter in YAML unless runtime requirements explicitly change.
 
@@ -187,10 +210,10 @@ description: TODO: describe what this skill does and exactly when to use it.
   - `action-handoff`: what should be executed, with default route + optional adapters.
   - `memory-handoff`: what should be retained, with default route + optional adapters (or explicit `none` rationale).
   - `archive`: where closure evidence is written.
-- Define default output route when no external driver exists (for example local `plan-<slug>.md` + `summary-<slug>.md`).
+- Define default output route when no external driver is usable (not detected / unresolved / invalid contract).
 - Define optional adapter routes for external systems (for example task driver / spec system / memory system), or explicitly state `standalone-only/no-adapter`.
 - If needed, add a Bagakit profile section that maps to concrete systems as optional examples.
-- Keep route selection rule-driven and fallback-safe.
+- Keep route selection capability/contract-driven and fallback-safe; avoid name-bound checks like `feat-harness`/`openspec` in core logic.
 
 ## Archive Gate (Completion Handoff)
 
@@ -648,6 +671,17 @@ def cmd_validate(args: argparse.Namespace) -> int:
             )
         if has_adapter_route and "optional" not in output_lower and "可选" not in output_lower:
             warnings.append("adapter routes should be marked optional to preserve standalone-first behavior")
+        has_concrete_adapter_names = any(token in output_lower for token in CONCRETE_ADAPTER_HINTS)
+        has_generic_adapter_terms = any(token in output_lower for token in GENERIC_ADAPTER_HINTS)
+        if has_concrete_adapter_names and not has_generic_adapter_terms:
+            warnings.append(
+                "output routing appears concrete-name-bound; describe generic adapter classes/capability rules first, "
+                "then map concrete systems as optional profile examples"
+            )
+        if "only when no" in output_lower and "detected" in output_lower:
+            warnings.append(
+                "fallback wording is too narrow; cover no external driver usable (not detected / unresolved / invalid contract)"
+            )
         if not any(token in output_lower for token in ACTION_HINTS):
             errors.append("output section must define an action handoff output")
         has_memory = any(token in output_lower for token in MEMORY_HINTS)

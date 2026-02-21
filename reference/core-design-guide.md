@@ -91,6 +91,7 @@ Guidance pack files for this skill:
 
 - Standalone-first execution is mandatory.
 - Cross-skill exchange is optional and rule/schema-driven.
+- Routing/discovery must be capability/contract-driven, not concrete system-name-driven.
 - Never require direct flow-calls to another skill as default prerequisite.
 - Runtime payload must be explicit in `SKILL_PAYLOAD.json`.
 - `README.md` must not be in runtime payload.
@@ -112,8 +113,9 @@ Every skill should define completion using explicit output destinations.
 
 Required:
 - Define output set clearly (what files/signals are produced).
-- Define default output route when no external driver system is available.
+- Define default output route when no external driver is usable (not detected, unresolved, or invalid contract).
 - Define optional adapter routes for external systems (for example task driver, spec system, memory system), or explicitly declare `standalone-only/no-adapter`.
+- Route selection rules must use generic adapter classes/capabilities first; concrete system names belong only to optional profile mappings.
 - Define archive gate: each output must have a resolved destination path/id before marking task complete.
 
 Recommended output shape:
@@ -121,7 +123,7 @@ Recommended output shape:
 - `memory-handoff`,
 - `archive`.
 
-If no driver is detected:
+If no driver is usable:
 - write a local fallback artifact (for example `plan-<slug>.md`),
 - still write archive metadata with destination evidence.
 

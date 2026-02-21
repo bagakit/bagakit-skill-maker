@@ -156,9 +156,9 @@ insert = """
 ## Output Routes and Default Mode
 
 - Define the output set explicitly (for example action handoff + summary/memory handoff).
-- Define default output route when no external driver exists (for example local plan-<slug>.md).
-- Define optional adapter routes for external systems (for example feat-harness, openspec, living-docs).
-- Keep route selection rule-driven and fallback-safe.
+- Define default output route when no external driver is usable (for example local plan-<slug>.md).
+- Define optional adapter routes by generic classes (for example task-driver, spec-system, memory-system).
+- Keep route selection capability/contract-driven and fallback-safe.
 
 """
 text = text.replace("## Archive Gate (Completion Handoff)\n", insert + "## Archive Gate (Completion Handoff)\n", 1)
@@ -195,7 +195,7 @@ insert = """
 
 - Every output must have a resolved destination path or id.
 - Archive must report action handoff and memory handoff destinations.
-- If adapter routes are unavailable, archive must still capture default local destinations.
+- If adapter routes are unavailable or unresolved, archive must still capture default local destinations.
 - Do not mark complete until archive evidence is written.
 
 """
