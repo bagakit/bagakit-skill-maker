@@ -21,6 +21,9 @@ target="${tmp}/demo-skill"
 [[ -f "${target}/agents/openai.yaml" ]]
 [[ -f "${target}/reference/start-here.md" ]]
 [[ -f "${target}/reference/tpl/template-note.md" ]]
+[[ -f "${target}/gate/README.md" ]]
+[[ -f "${target}/gate/anti-patterns/rules.toml" ]]
+[[ -f "${target}/gate/anti-patterns/check-anti-patterns.py" ]]
 
 echo "[test] payload policy"
 python3 - <<PY
@@ -31,7 +34,7 @@ data = json.loads(p.read_text(encoding="utf-8"))
 inc = set(data.get("include", []))
 if "README.md" in inc:
     raise SystemExit("README.md must not be in payload include")
-for req in ("SKILL.md", "scripts", "reference"):
+for req in ("SKILL.md", "scripts", "reference", "gate"):
     if req not in inc:
         raise SystemExit(f"missing payload item: {req}")
 PY
@@ -54,6 +57,66 @@ text = text.replace(
 p.write_text(text, encoding="utf-8")
 PY
 
+sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$target" >/dev/null
+
+echo "[test] missing complexity guardrails should fail"
+python3 - <<PY
+from pathlib import Path
+import re
+p = Path(r"${target}") / "SKILL.md"
+text = p.read_text(encoding="utf-8")
+text = re.sub(
+    r"\n## Complexity Guardrails \\(Anti-Bloat Checks\\)\n(?s:.*?)(?=\n## )",
+    "\n",
+    text,
+    count=1,
+)
+p.write_text(text, encoding="utf-8")
+PY
+if sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$target" >/dev/null 2>&1; then
+  echo "[test] expected validation to fail without complexity guardrails section" >&2
+  exit 1
+fi
+
+echo "[test] restore complexity guardrails section"
+python3 - <<PY
+from pathlib import Path
+p = Path(r"${target}") / "SKILL.md"
+text = p.read_text(encoding="utf-8")
+insert = """
+## Complexity Guardrails (Anti-Bloat Checks)
+
+- 预设偏多 / preset-heavy:
+  - Keep assumptions minimal and move scenario-specific presets to optional examples.
+  - Check: defaults are listed and justified.
+- 实现偏重 / implementation-heavy:
+  - Do not solve qualitative quality by scripts first.
+  - Check: qualitative checks stay in rubrics/review before code gates.
+- 默认行为太多 / too many defaults:
+  - Keep one default route and keep other routes optional.
+  - Check: no hidden defaults outside the default-route section.
+- 校验过硬 / over-hard validation:
+  - Keep hard gates for invariants only.
+  - Check: qualitative checks remain warning/rubric-based.
+- 约束分散 / scattered constraints:
+  - Keep constraints single-source.
+  - Check: avoid duplicated must-rules across sections/scripts.
+
+"""
+text = text.replace("## Metadata Contract Principle\n", insert + "## Metadata Contract Principle\n", 1)
+p.write_text(text, encoding="utf-8")
+PY
+sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$target" >/dev/null
+
+echo "[test] missing anti-pattern gate rules should fail"
+mv "${target}/gate/anti-patterns/rules.toml" "${target}/gate/anti-patterns/rules.toml.bak"
+if sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$target" >/dev/null 2>&1; then
+  echo "[test] expected validation to fail without gate/anti-patterns/rules.toml" >&2
+  exit 1
+fi
+
+echo "[test] restore anti-pattern gate rules"
+mv "${target}/gate/anti-patterns/rules.toml.bak" "${target}/gate/anti-patterns/rules.toml"
 sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$target" >/dev/null
 
 echo "[test] missing when-not-to-use should fail"

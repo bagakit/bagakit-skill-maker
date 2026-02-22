@@ -55,6 +55,7 @@ Before creating/improving/merging a skill for an unresolved problem:
 - Put deep material in `reference/`.
 - Put reusable templates in `reference/tpl/`.
 - Put deterministic repeatable work in `scripts/`.
+- Put validation protocol assets in `gate/<case>/` (`rules.toml` + `check-*` scripts).
 
 Rule of thumb:
 - high freedom -> text guidance,
@@ -65,6 +66,11 @@ Reference layout rule:
 - `reference/`: explanatory docs, guides, rationale.
 - `reference/tpl/`: reusable templates/examples.
 - Avoid mixing templates into generic docs.
+
+Gate layout rule:
+- `gate/`: validation protocol root.
+- `gate/<case>/rules.toml`: single-source rules for one validation domain.
+- `gate/<case>/check-*.py|sh|js|ts`: scripts that read `rules.toml` for that case.
 
 ## 5.1) Constraint Budget (Guidance-First)
 
@@ -88,9 +94,13 @@ Rules:
 - Promote guidance into hard gates only after repeated production failures of the same pattern.
 
 Guidance pack files for this skill:
-- `reference/guidance-pack-patterns.md`
-- `reference/guidance-pack-anti-patterns.md`
-- `reference/guidance-pack-examples.md`
+- `reference/guidance-pack/patterns.md`
+- `reference/guidance-pack/anti-patterns.md`
+- `reference/guidance-pack/examples.md`
+
+Gate baseline files for this skill:
+- `gate/anti-patterns/rules.toml`
+- `gate/anti-patterns/check-anti-patterns.py`
 
 ## 6) Core Contract Rules
 
@@ -178,6 +188,7 @@ Merge output must include:
 - trigger boundary clear and tested,
 - granularity decision explicit and justified,
 - payload minimal and runtime-only,
+- gate protocol present and structured (`gate/<case>/rules.toml` + `check-*`),
 - standalone behavior verified,
 - fallback path exists,
 - output routes explicit (default + optional adapters),
@@ -195,6 +206,7 @@ Validation should fail on:
 - missing action/memory/archive handoff wording,
 - hard direct flow-call without optional contract wording,
 - payload include drift (duplicate/out-of-root/README),
+- missing gate protocol structure (`gate/` missing, or case rules/script files missing),
 - generated files containing absolute path literals,
 - oversized `SKILL.md` (`> 500` lines),
 - ambiguous legacy/workaround runtime file names.
