@@ -10,6 +10,8 @@ Use this template before implementation. Category titles are task-driven.
 - Usefulness: <high|medium|low + reason>
 - Value: <expected impact and reuse value>
 - Reference Plan: <reuse/adapt/reject + integration plan>
+- Authority: <primary|secondary|community>
+- Authority Rationale: <why this authority level is appropriate>
 
 ## 权威资料
 
@@ -19,6 +21,8 @@ Use this template before implementation. Category titles are task-driven.
 - 有用程度: <高/中/低 + 原因>
 - 价值: <对当前任务的价值>
 - 参考计划: <如何落地到目标 skill>
+- 权威级别: <primary|secondary|community>
+- 权威依据: <为何判定为该权威级别>
 
 ## 论文
 
@@ -28,6 +32,8 @@ Use this template before implementation. Category titles are task-driven.
 - Usefulness: <high|medium|low + reason>
 - Value: <methodological value>
 - Reference Plan: <what to adopt or reject>
+- Authority: <primary|secondary|community>
+- Authority Rationale: <why this authority level is appropriate>
 
 ## 开源库
 
@@ -37,3 +43,5 @@ Use this template before implementation. Category titles are task-driven.
 - 有用程度: <高/中/低 + 原因>
 - 价值: <engineering value>
 - 参考计划: <reuse/adapt/reject + rationale>
+- 权威级别: <primary|secondary|community>
+- 权威依据: <为何判定为该权威级别>

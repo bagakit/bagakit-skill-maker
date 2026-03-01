@@ -19,7 +19,7 @@ Use this guide before creating/refactoring a skill for a problem that is not yet
    - trust signal (maintainer type + ecosystem reputation).
 4. Record reuse/adapt/reject decisions with reasons (Section 5).
 5. Only create from scratch when the search log shows no good reusable/adaptable option.
-6. Persist the search log to `reference/discovery/discovery-log.md` using template `reference/tpl/discovery-log-tpl.md`.
+6. Persist the search log to `docs/discovery/discovery-log.md` using template `docs/discovery/discovery-log-tpl.md` (legacy `reference/discovery/...` is accepted with compatibility warnings).
 
 If another discovery skill/tool exists and is useful, treat it as an optional accelerator on top of this baseline, not a prerequisite.
 
@@ -34,7 +34,7 @@ Create 2-3 keyword sets:
 
 ### A. Project-local and trusted local context first
 
-- current repo docs (`docs/`, `reference/`, `catalog/`, existing `SKILL.md` files),
+- current repo docs (`docs/`, `playbook/` or `reference/`, `catalog/`, existing `SKILL.md` files),
 - existing installed skill folders and payload files,
 - existing scripts that may already provide the capability.
 
@@ -92,11 +92,14 @@ Capture at least:
 - usefulness,
 - value,
 - applicability decision (`reuse` / `adapt` / `reject`),
-- reference plan.
+- reference plan,
+- authority level (`primary|secondary|community`),
+- authority rationale.
 
 Log structure:
 - Use task-driven category headings (`## <category>`), for example `skills`, `权威资料`, `论文`, `开源库`.
 - Under each category, record concrete entries.
+- Ensure at least one entry is `Authority: primary` (official docs/standards/RFC/main repo docs).
 
 Minimal entry template:
 
@@ -107,4 +110,6 @@ Minimal entry template:
 - Usefulness: <high|medium|low + reason>
 - Value: <expected value/impact>
 - Reference Plan: <reuse/adapt/reject + how to apply>
+- Authority: <primary|secondary|community>
+- Authority Rationale: <why this source authority level is appropriate>
 ```

@@ -36,7 +36,7 @@ Also require:
 Before creating/improving/merging a skill for an unresolved problem:
 
 1. Search first; do not jump directly to implementation.
-2. Use `reference/skill-discovery-sources.md` as the default standalone discovery playbook.
+2. Use `playbook/skill-discovery-sources.md` as the default standalone discovery playbook.
 3. Think in keyword sets (domain terms, task terms, synonym terms) before searching.
 4. Source order:
    - project-local docs/contracts/catalogs,
@@ -48,15 +48,16 @@ Before creating/improving/merging a skill for an unresolved problem:
 7. Discovery must remain standalone; do not require any single marketplace CLI/skill to exist.
 8. If discovery identifies a better complementary skill, use it as an optional accelerator, never as a required prerequisite.
 9. Compare at least three candidates before deciding `reuse` / `adapt` / `build-new` unless the first match is clearly authoritative and complete.
-10. Discovery evidence is mandatory and must be persisted at `reference/discovery/discovery-log.md`.
-11. Use template `reference/tpl/discovery-log-tpl.md`; category headings are task-driven (for example `skills`, `权威资料`, `论文`, `开源库`).
-12. Each discovery entry must include `Source/来源`, `Checked/查看内容`, `Relevance/关联度`, `Usefulness/有用程度`, `Value/价值`, and `Reference Plan/参考计划`.
+10. Discovery evidence is mandatory and should be persisted at `docs/discovery/discovery-log.md`.
+11. Use template `docs/discovery/discovery-log-tpl.md`; category headings are task-driven (for example `skills`, `权威资料`, `论文`, `开源库`).
+12. Each discovery entry must include `Source/来源`, `Checked/查看内容`, `Relevance/关联度`, `Usefulness/有用程度`, `Value/价值`, `Reference Plan/参考计划`, `Authority/权威级别`, and `Authority Rationale/权威依据`.
+13. Discovery authority policy: keep at least one `Authority: primary` entry (official docs, standards, RFCs, main-repo docs); default is warning, `validate --strict-authority` is hard-fail.
 
 ## 5) Progressive Disclosure
 
 - Keep `SKILL.md` concise and execution-oriented.
-- Put deep material in `reference/`.
-- Put reusable templates in `reference/tpl/`.
+- Put deep skill-extension material in `playbook/` (legacy `reference/` accepted).
+- Put reusable runtime templates in `<detail-dir>/tpl/` (`playbook/tpl/` by default).
 - Put deterministic repeatable work in `scripts/`.
 - Put validation protocol assets in `gate/<case>/` (`rules.toml` + `check-*` scripts).
 
@@ -65,11 +66,14 @@ Rule of thumb:
 - medium freedom -> structured steps/pseudocode,
 - low freedom -> executable scripts.
 
-Reference layout rule:
-- `reference/`: explanatory docs, guides, rationale.
-- `reference/tpl/`: reusable templates/examples.
-- `reference/discovery/`: discovery evidence logs for search-first gate.
-- Avoid mixing templates into generic docs.
+Playbook layout rule:
+- `playbook/` (legacy `reference/` accepted): skill-extension docs, guides, rationale.
+- `<detail-dir>/tpl/`: reusable templates/examples used during execution.
+- `docs/discovery/`: discovery evidence logs for search-first gate.
+- Avoid mixing runtime templates into generic process docs.
+- Minimality litmus test: if removing a file does not affect trigger accuracy, execution correctness, output routes, or archive gate, it belongs in `docs/`, not `playbook/`.
+- Soft gate: if a playbook file looks process-oriented (discussion/notes/onepager), warn and migrate to `docs/` unless runtime impact is proven.
+- Hard gate: SKILL.md path references must resolve to SKILL_PAYLOAD include items only; process docs must stay unreferenced by SKILL.md.
 
 Gate layout rule:
 - `gate/`: validation protocol root.
@@ -85,7 +89,7 @@ Rules:
 - If both agents and humans should execute in roughly the same way, and quality depends on clear standards with low creative variance, use a guidance pack.
 - Treat qualitative reasoning quality as prompt-reviewed:
   - Examples: clarification depth, option quality, debate rigor, writing quality.
-  - Encode these as explicit prompt rubrics/checklists in SKILL/reference templates.
+  - Encode these as explicit prompt rubrics/checklists in SKILL/playbook templates.
   - Do not enforce these qualitative dimensions as script pass/fail tests.
 - Add programmatic gates only for hard invariants that are expensive to recover:
   - standalone-first behavior,
@@ -98,9 +102,9 @@ Rules:
 - Promote guidance into hard gates only after repeated production failures of the same pattern.
 
 Guidance pack files for this skill:
-- `reference/guidance-pack/patterns.md`
-- `reference/guidance-pack/anti-patterns.md`
-- `reference/guidance-pack/examples.md`
+- `playbook/guidance-pack/patterns.md`
+- `playbook/guidance-pack/anti-patterns.md`
+- `playbook/guidance-pack/examples.md`
 
 Gate baseline files for this skill:
 - `gate/anti-patterns/rules.toml`
@@ -188,12 +192,15 @@ Merge output must include:
 - frontmatter valid (`name`, `description` only, no placeholders),
 - metadata contract is semantic (avoid one-key-per-adapter),
 - machine-readable artifact frontmatter uses TOML where applicable,
-- reference layout is clean (`reference/` docs + `reference/tpl/` templates),
+- playbook layout is clean (`playbook/` docs + `playbook/tpl/` templates; legacy `reference/` accepted),
+- playbook minimality is explicit (remove-without-impact => move to `docs/`; process-like playbook files reviewed),
+- SKILL.md does not reference non-payload paths (especially `docs/`),
 - trigger boundary clear and tested,
 - granularity decision explicit and justified,
 - payload minimal and runtime-only,
 - gate protocol present and structured (`gate/<case>/rules.toml` + `check-*`),
-- discovery evidence present and structured (`reference/discovery/discovery-log.md`),
+- discovery evidence present and structured (`docs/discovery/discovery-log.md`; legacy detail-dir discovery accepted with warning),
+- discovery authority policy satisfied (authority fields present; at least one `primary`; strict mode available for release gates),
 - standalone behavior verified,
 - fallback path exists,
 - output routes explicit (default + optional adapters),
@@ -203,8 +210,9 @@ Merge output must include:
 
 Validation should fail on:
 - missing trigger semantics in frontmatter (`when/适用/用于`),
-- missing mandatory discovery evidence (`reference/discovery/discovery-log.md`),
-- discovery evidence missing required fields (`Source/Checked/Relevance/Usefulness/Value/Reference Plan`),
+- missing mandatory discovery evidence (`docs/discovery/discovery-log.md`),
+- discovery evidence missing required fields (`Source/Checked/Relevance/Usefulness/Value/Reference Plan/Authority/Authority Rationale`),
+- strict authority mode detects no `primary` source or missing authority metadata (`validate --strict-authority`),
 - machine-readable metadata schema hardcodes adapter-specific key expansion where semantic generic keys are expected,
 - missing standalone-first wording,
 - missing `When to Use` / `When NOT to Use`,

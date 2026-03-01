@@ -6,4 +6,4 @@ Use `gate/` as the validation protocol root.
 - Each case directory must include:
   - `rules.toml` as the single-source rules file.
   - one or more `check-*.py|sh|js|ts` scripts that read `rules.toml`.
-- Keep domain docs in `reference/`; keep execution scripts in `scripts/`; keep validation protocol in `gate/`.
+- Keep skill-extension details in `playbook/` (legacy `reference/` accepted); keep process docs in `docs/`; keep validation protocol in `gate/`.

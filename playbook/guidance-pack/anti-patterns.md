@@ -85,7 +85,7 @@ Fix:
 ## Anti-Pattern 2: Validation Assets Scattered Outside `gate/`
 
 Symptoms:
-- validation TOML and check scripts are spread across `reference/`, `scripts/`, and ad-hoc folders
+- validation TOML and check scripts are spread across `playbook/`/`reference/`, `scripts/`, and ad-hoc folders
 - no single validation protocol root
 
 Risk:
@@ -94,7 +94,7 @@ Risk:
 Fix:
 - keep all validation protocol assets under `gate/<case>/`,
 - keep one `rules.toml` + `check-*` scripts per validation case,
-- keep `reference/` for narrative docs only.
+- keep `playbook/` (or legacy `reference/`) for runtime detail docs only.
 
 ## Anti-Pattern 3: Adapter-First Without Fallback
 

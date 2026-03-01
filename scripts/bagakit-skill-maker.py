@@ -6,6 +6,8 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -21,6 +23,7 @@ MAX_SKILL_LINES = 500
 FILE_STEM_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 GENERIC_FILE_STEMS = {"helper", "helpers", "misc", "tmp", "temp", "util", "utils", "test", "tests"}
 LEGACY_TERMS = {"legacy", "compat", "deprecated", "workaround", "shim", "backward", "old"}
+LEGACY_TERM_ALLOWLIST_STEMS = {"migration-from-old-version", "migration-from-previous-version"}
 OPTIONAL_HINTS = (
     "optional",
     "if available",
@@ -104,16 +107,38 @@ NO_ADAPTER_HINTS = (
 ALLOWED_SCRIPT_EXTENSIONS = {".sh", ".py", ".js", ".ts"}
 ALLOWED_REFERENCE_EXTENSIONS = {".md", ".txt", ".json", ".yaml", ".yml"}
 ALLOWED_GATE_EXTENSIONS = ALLOWED_SCRIPT_EXTENSIONS | {".md", ".txt", ".json", ".yaml", ".yml", ".toml"}
-ABSOLUTE_PATH_SCAN_EXTENSIONS = {".md", ".txt", ".json", ".yaml", ".yml", ".toml"}
+ABSOLUTE_PATH_SCAN_EXTENSIONS = {".md", ".txt", ".json", ".yaml", ".yml", ".toml"} | ALLOWED_SCRIPT_EXTENSIONS
 ABSOLUTE_POSIX_RE = re.compile(
     r"(?<![:A-Za-z0-9_])/(?:Users|home|private|var|tmp|opt|usr|etc|mnt|Volumes|absolute)(?:/[^\s\"'`<>|]+)+"
 )
 ABSOLUTE_WINDOWS_RE = re.compile(r"(?i)\b[A-Z]:[\\/][^\s\"'`<>|]+")
+ABSOLUTE_PATH_ALLOWED_PREFIXES = ("/usr/bin/env",)
+SCRIPT_RESOLUTION_FALLBACK_PATTERNS = (
+    re.compile(r"(?i)(?:\$HOME|~)/\.bagakit/skills/[a-z0-9-]+"),
+    re.compile(r"\$\{BAGAKIT_HOME:-\$HOME/\.bagakit\}/skills/[a-z0-9-]+"),
+)
+SCRIPT_LOOKUP_CONTEXT_HINTS = (
+    "/scripts/",
+    "_SKILL_DIR",
+    "BAGAKIT_REFERENCE_SKILLS_HOME",
+)
+SCRIPT_TEMPLATE_SUFFIXES = (
+    ".sh.tpl",
+    ".py.tpl",
+    ".js.tpl",
+    ".ts.tpl",
+    "-sh-template.md",
+    "-py-template.md",
+    "-js-template.md",
+    "-ts-template.md",
+)
 DISCOURAGED_ADAPTER_KEYS = ("driver_ftharness", "driver_openspec", "driver_longrun")
 ANTI_PATTERN_HINTS = ("avoid", "bad pattern", "anti-pattern", "instead of", "不要", "避免", "禁用")
-REFERENCE_DIR_CANONICAL = "reference"
-REFERENCE_DIR_LEGACY = "references"
-REFERENCE_DIR_ALIASES = (REFERENCE_DIR_CANONICAL, REFERENCE_DIR_LEGACY)
+PLAYBOOK_DIR_CANONICAL = "playbook"
+PLAYBOOK_DIR_LEGACY = "reference"
+PLAYBOOK_DIR_OLDER = "references"
+PLAYBOOK_DIR_ALIASES = (PLAYBOOK_DIR_CANONICAL, PLAYBOOK_DIR_LEGACY, PLAYBOOK_DIR_OLDER)
+DOCS_DIR = "docs"
 GATE_DIR = "gate"
 ANTI_PATTERNS_GATE_CASE = "anti-patterns"
 ANTI_PATTERNS_GATE_RULES = "rules.toml"
@@ -136,6 +161,8 @@ DISCOVERY_DIR_NAME = "discovery"
 DISCOVERY_LOG_BASENAME = "discovery-log.md"
 DISCOVERY_TEMPLATE_BASENAME = "discovery-log-tpl.md"
 DISCOVERY_MIN_SOURCE_ENTRIES = 3
+DISCOVERY_REQUIRED_FIELDS_LABEL = "Source/Checked/Relevance/Usefulness/Value/Reference Plan"
+DISCOVERY_AUTHORITY_LEVELS = ("primary", "secondary", "community")
 DISCOVERY_SOURCE_LINE_RE = re.compile(r"(?im)^\s*-\s*(?:source|来源)\s*[:：]\s*\S")
 DISCOVERY_PLACEHOLDER_RE = re.compile(r"(?i)\b(?:todo|tbd|placeholder)\b|待补|待填写|待定")
 DISCOVERY_ENTRY_FIELD_PATTERNS: dict[str, re.Pattern[str]] = {
@@ -145,6 +172,45 @@ DISCOVERY_ENTRY_FIELD_PATTERNS: dict[str, re.Pattern[str]] = {
     "value": re.compile(r"(?im)^\s*-\s*(?:value|价值|价值判断)\s*[:：]\s*\S"),
     "reference-plan": re.compile(r"(?im)^\s*-\s*(?:reference plan|参考计划|如何参考|复用计划)\s*[:：]\s*\S"),
 }
+DISCOVERY_AUTHORITY_LEVEL_RE = re.compile(
+    r"(?im)^\s*-\s*(?:authority(?:\s*level)?(?:\s*/\s*权威级别)?|authority\s*/\s*权威级别|权威级别)\s*[:：]\s*(\S+)"
+)
+DISCOVERY_AUTHORITY_RATIONALE_RE = re.compile(
+    r"(?im)^\s*-\s*(?:authority rationale|authority basis|authority evidence|权威依据|权威说明)\s*[:：]\s*\S"
+)
+SKILL_PATH_REFERENCE_RE = re.compile(
+    r"(?<![A-Za-z0-9_])((?:playbook|reference|references|docs|scripts|gate|agents)/(?:[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*)?)"
+)
+PLAYBOOK_PROCESS_FILENAME_HINTS = (
+    "discussion",
+    "meeting",
+    "minutes",
+    "brainstorm",
+    "onepager",
+    "retro",
+    "retrospective",
+    "journal",
+    "diary",
+    "transcript",
+    "memo",
+    "history",
+    "timeline",
+    "postmortem",
+    "record",
+    "notes",
+    "note",
+)
+PLAYBOOK_MINIMALITY_HINTS = (
+    "if removing a file does not affect",
+    "if removing this file does not affect",
+    "if deleting a file does not affect",
+    "delete a file does not affect",
+    "删除某个文件不影响",
+    "删掉某个文件不影响",
+    "不影响技能触发",
+    "不影响技能执行",
+    "不影响技能输出",
+)
 
 
 class TomlDecodeError(ValueError):
@@ -328,7 +394,8 @@ description: TODO: describe what this skill does and exactly when to use it.
 - Keep the skill standalone-first.
 - Enforce search-first discovery as a required gate before implementation.
 - Generated files should avoid absolute paths; use relative paths or env variables.
-- Keep references organized: docs under `reference/`, templates under `reference/tpl/`.
+- Keep skill-extension details organized under `playbook/`, with templates under `<detail-dir>/tpl/`.
+- Keep process docs (discovery/discussion/migration notes) outside runtime payload by default.
 - Keep validation protocol assets under `gate/<case>/` (`rules.toml` + `check-*.py|sh|js|ts`).
 
 ## When to Use This Skill
@@ -352,14 +419,14 @@ description: TODO: describe what this skill does and exactly when to use it.
 | Contract | Direct flow-calls to other skills | switch to optional rule/schema signal contract |
 | Metadata contract | one key per adapter/system; hard-coded workflow fields | use semantic generic keys + parseable `*_meta`; prefer TOML frontmatter in machine-readable artifacts |
 | Payload | Runtime/dev files mixed | trim `SKILL_PAYLOAD.json` to runtime-only files |
-| Path portability | Generated docs/config contain local absolute paths | rewrite to relative/env-based paths |
+| Path portability | Generated docs or config contain local absolute paths | rewrite to relative/env-based paths |
 | Output/archive | Outputs exist without clear destination or completion gate | define default route + optional adapters + archive handoff |
 
 ## Workflow
 
-0. Run mandatory discovery first, then archive evidence at `reference/discovery/discovery-log.md`.
+0. Run mandatory discovery first, then archive evidence into process docs (out of payload).
 1. Capture concrete triggering and non-triggering examples.
-2. Keep SKILL.md concise; move deep material to `reference/` and templates to `reference/tpl/`.
+2. Keep SKILL.md concise; move deep skill details to `playbook/` and templates to `<detail-dir>/tpl/`.
 3. Put deterministic/fragile execution steps into `scripts/`.
 4. Put validation rules and validation scripts into `gate/<case>/`.
 5. Validate and iterate based on over-trigger/under-trigger behavior.
@@ -368,6 +435,9 @@ description: TODO: describe what this skill does and exactly when to use it.
 
 - Qualitative quality (for example clarification depth, discussion rigor, writing quality) should be defined as prompt rubrics/checklists and reviewed by a coding agent/human.
 - Script checks should validate objective invariants only (format, required sections, output destinations, path/runtime contracts).
+- Script lookup must be local-first: resolve from the skill's own `scripts/` payload (or explicit skill-dir env), never via `~/.bagakit`/`BAGAKIT_HOME` fallback.
+- Missing required script under `scripts/` is a bug: fail fast and fix packaging/indexing; never add fallback lookup roots.
+- If scripts exist, language lint is mandatory as a hard gate (Python: `ruff check` + `python -m py_compile`; Bash: `bash -n`; JS: `node --check`; TS: `tsc --noEmit`).
 
 ## Complexity Guardrails (Anti-Bloat Checks)
 
@@ -401,18 +471,25 @@ description: TODO: describe what this skill does and exactly when to use it.
 - For machine-readable metadata blocks in Markdown artifacts, prefer TOML frontmatter (`+++`).
 - Keep SKILL.md header/frontmatter in YAML unless runtime requirements explicitly change.
 
-## Reference Layout
+## Playbook Layout
 
-- Put explanatory docs and guides under `reference/`.
-- Put reusable templates under `reference/tpl/`.
-- Keep discovery evidence under `reference/discovery/`.
-- Avoid mixing templates into generic docs to keep reference hierarchy clean.
+- Put skill-extension details under `playbook/`.
+- Put reusable templates under `<detail-dir>/tpl/`.
+- Keep process docs (discovery/discussion/migration notes) outside runtime payload.
+- Avoid mixing runtime playbook templates into generic process docs.
+
+## Playbook Minimality Principle (Soft Gate)
+
+- Keep only runtime-essential detail docs in `playbook/`.
+- Litmus test: if removing a file does not affect trigger accuracy, execution correctness, output routes, or archive gate, move it to process docs and exclude it from payload.
+- Soft gate: if a `playbook/` file looks process-oriented (discussion/notes/onepager), treat it as a migration candidate to process docs.
+- Hard gate: SKILL.md path references must stay inside SKILL_PAYLOAD include (process docs stay unreferenced by SKILL.md).
 
 ## Discovery Evidence (Mandatory)
 
 - Discovery is a hard gate: do not proceed to implementation before search evidence is recorded.
-- Persist discovery evidence at `reference/discovery/discovery-log.md`.
-- Use template `reference/tpl/discovery-log-tpl.md` as the default format.
+- Persist discovery evidence in process docs outside runtime payload.
+- Use a structured discovery template in process docs and keep those files out of runtime payload.
 - Category headings are task-driven and flexible (for example `skills`, `权威资料`, `论文`, `开源库`).
 - Under each category, record concrete inspected items and include:
   - `Source/来源`,
@@ -420,8 +497,14 @@ description: TODO: describe what this skill does and exactly when to use it.
   - `Relevance/关联度`,
   - `Usefulness/有用程度`,
   - `Value/价值`,
-  - `Reference Plan/参考计划`.
+  - `Reference Plan/参考计划`,
+  - `Authority/权威级别` (`primary|secondary|community`),
+  - `Authority Rationale/权威依据`.
 - Minimum evidence: at least 3 source entries.
+- Authority policy:
+  - At least one entry should be `Authority: primary` (official docs, standards, RFCs, main-repo docs).
+  - Default validation emits warning for missing authority structure.
+  - `validate --strict-authority` upgrades authority warnings to hard errors.
 
 ## Gate Layout (Validation Protocol)
 
@@ -523,6 +606,8 @@ Use this template before implementation. Category titles are task-driven; exampl
 - Usefulness: <high|medium|low + reason>
 - Value: <expected impact and reuse value>
 - Reference Plan: <how to reuse/adapt/reject in target skill>
+- Authority: <primary|secondary|community>
+- Authority Rationale: <why this authority level is appropriate>
 
 ## 权威资料
 
@@ -532,6 +617,8 @@ Use this template before implementation. Category titles are task-driven; exampl
 - 有用程度: <高/中/低 + 原因>
 - 价值: <对当前任务的价值>
 - 参考计划: <如何落地到目标 skill>
+- 权威级别: <primary|secondary|community>
+- 权威依据: <为何判定为该权威级别>
 
 ## 论文
 
@@ -541,6 +628,8 @@ Use this template before implementation. Category titles are task-driven; exampl
 - Usefulness: <high|medium|low + reason>
 - Value: <methodological value>
 - Reference Plan: <what to adopt or reject>
+- Authority: <primary|secondary|community>
+- Authority Rationale: <why this authority level is appropriate>
 
 ## 开源库
 
@@ -550,6 +639,8 @@ Use this template before implementation. Category titles are task-driven; exampl
 - 有用程度: <高/中/低 + 原因>
 - 价值: <engineering value>
 - 参考计划: <reuse/adapt/reject + rationale>
+- 权威级别: <primary|secondary|community>
+- 权威依据: <为何判定为该权威级别>
 """
 
 
@@ -566,6 +657,8 @@ def build_discovery_log_seed() -> str:
 - Usefulness: TODO
 - Value: TODO
 - Reference Plan: TODO
+- Authority: TODO
+- Authority Rationale: TODO
 
 ## <category-2>
 
@@ -575,6 +668,8 @@ def build_discovery_log_seed() -> str:
 - Usefulness: TODO
 - Value: TODO
 - Reference Plan: TODO
+- Authority: TODO
+- Authority Rationale: TODO
 
 ## <category-3>
 
@@ -584,6 +679,8 @@ def build_discovery_log_seed() -> str:
 - Usefulness: TODO
 - Value: TODO
 - Reference Plan: TODO
+- Authority: TODO
+- Authority Rationale: TODO
 """
 
 
@@ -593,7 +690,7 @@ def build_discovery_readme() -> str:
 Store mandatory search evidence here before implementation.
 
 - Required log file: `discovery-log.md`
-- Template: `../tpl/discovery-log-tpl.md`
+- Template: `discovery-log-tpl.md`
 - Each entry must include:
   - `Source/来源`
   - `Checked/查看内容`
@@ -601,6 +698,10 @@ Store mandatory search evidence here before implementation.
   - `Usefulness/有用程度`
   - `Value/价值`
   - `Reference Plan/参考计划`
+  - `Authority/权威级别` (`primary|secondary|community`)
+  - `Authority Rationale/权威依据`
+- At least one entry should be `Authority: primary`.
+- Use `validate --strict-authority` to hard-fail authority gate issues.
 """
 
 
@@ -881,7 +982,7 @@ Use `gate/` as the validation protocol root.
 - Each case directory must include:
   - `rules.toml` as the single-source rules file.
   - one or more `check-*.py|sh|js|ts` scripts that read `rules.toml`.
-- Keep domain docs in `reference/`; keep execution scripts in `scripts/`; keep validation protocol in `gate/`.
+- Keep skill-extension details in `playbook/` (legacy `reference/` accepted); keep process docs in `docs/`; keep validation protocol in `gate/`.
 """
 
 
@@ -893,13 +994,13 @@ def cmd_init(args: argparse.Namespace) -> int:
         eprint(f"error: target directory already exists: {skill_dir}")
         return 1
 
-    includes = ["SKILL.md", REFERENCE_DIR_CANONICAL, "scripts", GATE_DIR]
+    includes = ["SKILL.md", PLAYBOOK_DIR_CANONICAL, "scripts", GATE_DIR]
     if args.with_agents:
         includes.append("agents")
 
     skill_dir.mkdir(parents=True, exist_ok=False)
-    (skill_dir / REFERENCE_DIR_CANONICAL / "tpl").mkdir(parents=True, exist_ok=True)
-    (skill_dir / REFERENCE_DIR_CANONICAL / DISCOVERY_DIR_NAME).mkdir(parents=True, exist_ok=True)
+    (skill_dir / PLAYBOOK_DIR_CANONICAL / "tpl").mkdir(parents=True, exist_ok=True)
+    (skill_dir / DOCS_DIR / DISCOVERY_DIR_NAME).mkdir(parents=True, exist_ok=True)
     (skill_dir / "scripts").mkdir(parents=True, exist_ok=True)
     (skill_dir / GATE_DIR / ANTI_PATTERNS_GATE_CASE).mkdir(parents=True, exist_ok=True)
 
@@ -909,23 +1010,23 @@ def cmd_init(args: argparse.Namespace) -> int:
         json.dumps({"version": 1, "include": includes}, indent=2, ensure_ascii=False) + "\n",
     )
     write_text(
-        skill_dir / REFERENCE_DIR_CANONICAL / "start-here.md",
-        "# Start Here\n\nAdd reference docs that are too detailed for SKILL.md.\n",
+        skill_dir / PLAYBOOK_DIR_CANONICAL / "start-here.md",
+        "# Start Here\n\nAdd playbook details that are too detailed for SKILL.md.\n",
     )
     write_text(
-        skill_dir / REFERENCE_DIR_CANONICAL / "tpl" / "template-note.md",
+        skill_dir / PLAYBOOK_DIR_CANONICAL / "tpl" / "template-note.md",
         "# Template Note\n\nPut reusable markdown/json templates in this folder.\n",
     )
     write_text(
-        skill_dir / REFERENCE_DIR_CANONICAL / "tpl" / DISCOVERY_TEMPLATE_BASENAME,
+        skill_dir / DOCS_DIR / DISCOVERY_DIR_NAME / DISCOVERY_TEMPLATE_BASENAME,
         build_discovery_log_template(),
     )
     write_text(
-        skill_dir / REFERENCE_DIR_CANONICAL / DISCOVERY_DIR_NAME / "README.md",
+        skill_dir / DOCS_DIR / DISCOVERY_DIR_NAME / "README.md",
         build_discovery_readme(),
     )
     write_text(
-        skill_dir / REFERENCE_DIR_CANONICAL / DISCOVERY_DIR_NAME / DISCOVERY_LOG_BASENAME,
+        skill_dir / DOCS_DIR / DISCOVERY_DIR_NAME / DISCOVERY_LOG_BASENAME,
         build_discovery_log_seed(),
     )
     write_text(skill_dir / GATE_DIR / "README.md", build_gate_readme())
@@ -945,7 +1046,7 @@ def cmd_init(args: argparse.Namespace) -> int:
     print(f"  1) edit {skill_dir / 'SKILL.md'}")
     print(
         "  2) fill discovery evidence: "
-        f"{skill_dir / REFERENCE_DIR_CANONICAL / DISCOVERY_DIR_NAME / DISCOVERY_LOG_BASENAME}"
+        f"{skill_dir / DOCS_DIR / DISCOVERY_DIR_NAME / DISCOVERY_LOG_BASENAME}"
     )
     print(f"  3) run: {Path(__file__).name} validate --skill-dir {skill_dir}")
     return 0
@@ -1139,38 +1240,51 @@ def section_block(skill_text: str, heading_re: str) -> str | None:
     return tail[: next_heading.start()] if next_heading else tail
 
 
-def detect_reference_layout(skill_dir: Path) -> tuple[bool, bool]:
-    has_canonical = (skill_dir / REFERENCE_DIR_CANONICAL).exists()
-    has_legacy = (skill_dir / REFERENCE_DIR_LEGACY).exists()
-    return has_canonical, has_legacy
+def detect_playbook_layout(skill_dir: Path) -> tuple[bool, bool, bool]:
+    has_canonical = (skill_dir / PLAYBOOK_DIR_CANONICAL).exists()
+    has_legacy = (skill_dir / PLAYBOOK_DIR_LEGACY).exists()
+    has_older = (skill_dir / PLAYBOOK_DIR_OLDER).exists()
+    return has_canonical, has_legacy, has_older
 
 
-def resolve_reference_root(skill_dir: Path) -> Path | None:
-    canonical = skill_dir / REFERENCE_DIR_CANONICAL
-    legacy = skill_dir / REFERENCE_DIR_LEGACY
-    if canonical.is_dir():
-        return canonical
-    if legacy.is_dir():
-        return legacy
-    return None
-
-
-def scan_discovery_evidence(skill_dir: Path) -> tuple[list[str], list[str]]:
+def scan_discovery_evidence(skill_dir: Path, *, strict_authority: bool = False) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
 
-    reference_root = resolve_reference_root(skill_dir)
-    if reference_root is None:
-        errors.append(
-            f"missing {REFERENCE_DIR_CANONICAL}/ (or legacy {REFERENCE_DIR_LEGACY}/); discovery evidence requires "
-            f"{REFERENCE_DIR_CANONICAL}/{DISCOVERY_DIR_NAME}/{DISCOVERY_LOG_BASENAME}"
-        )
-        return errors, warnings
+    def report_authority_issue(message: str) -> None:
+        if strict_authority:
+            errors.append(message)
+            return
+        warnings.append(f"{message}; use --strict-authority to enforce as hard gate")
 
-    discovery_dir = reference_root / DISCOVERY_DIR_NAME
-    rel_discovery_dir = discovery_dir.relative_to(skill_dir).as_posix()
-    if not discovery_dir.is_dir():
-        errors.append(f"missing mandatory discovery directory: {rel_discovery_dir}")
+    preferred_discovery_dir = skill_dir / DOCS_DIR / DISCOVERY_DIR_NAME
+    legacy_discovery_dirs = [skill_dir / dirname / DISCOVERY_DIR_NAME for dirname in PLAYBOOK_DIR_ALIASES]
+
+    discovery_dir: Path | None = None
+    if preferred_discovery_dir.is_dir():
+        discovery_dir = preferred_discovery_dir
+        for legacy_dir in legacy_discovery_dirs:
+            if legacy_dir.is_dir():
+                warnings.append(
+                    f"legacy discovery directory still present: {legacy_dir.relative_to(skill_dir).as_posix()}; "
+                    f"prefer {DOCS_DIR}/{DISCOVERY_DIR_NAME}/ only"
+                )
+                break
+    else:
+        for legacy_dir in legacy_discovery_dirs:
+            if legacy_dir.is_dir():
+                discovery_dir = legacy_dir
+                warnings.append(
+                    f"legacy discovery path detected: {legacy_dir.relative_to(skill_dir).as_posix()}; "
+                    f"prefer {DOCS_DIR}/{DISCOVERY_DIR_NAME}/{DISCOVERY_LOG_BASENAME}"
+                )
+                break
+
+    if discovery_dir is None:
+        errors.append(
+            f"missing mandatory discovery directory: {DOCS_DIR}/{DISCOVERY_DIR_NAME}/ "
+            f"(legacy under {PLAYBOOK_DIR_CANONICAL}/ or {PLAYBOOK_DIR_LEGACY}/ is accepted with warnings)"
+        )
         return errors, warnings
 
     discovery_log = discovery_dir / DISCOVERY_LOG_BASENAME
@@ -1198,6 +1312,7 @@ def scan_discovery_evidence(skill_dir: Path) -> tuple[list[str], list[str]]:
         )
         return errors, warnings
 
+    primary_count = 0
     for idx, match in enumerate(source_matches, start=1):
         start = match.start()
         end = source_matches[idx].start() if idx < len(source_matches) else len(text)
@@ -1208,7 +1323,7 @@ def scan_discovery_evidence(skill_dir: Path) -> tuple[list[str], list[str]]:
         if missing_fields:
             errors.append(
                 f"{rel_discovery_log} entry #{idx} missing fields: {', '.join(missing_fields)} "
-                "(required: Source/Checked/Relevance/Usefulness/Value/Reference Plan)"
+                f"(required: {DISCOVERY_REQUIRED_FIELDS_LABEL})"
             )
         if DISCOVERY_PLACEHOLDER_RE.search(block):
             errors.append(
@@ -1216,12 +1331,54 @@ def scan_discovery_evidence(skill_dir: Path) -> tuple[list[str], list[str]]:
                 "discovery gate requires concrete inspected content"
             )
 
-    tpl_file = reference_root / "tpl" / DISCOVERY_TEMPLATE_BASENAME
-    rel_tpl_file = tpl_file.relative_to(skill_dir).as_posix()
-    if not tpl_file.is_file():
-        warnings.append(
-            f"missing discovery template: {rel_tpl_file}; add tpl for consistent search evidence capture"
+        authority_match = DISCOVERY_AUTHORITY_LEVEL_RE.search(block)
+        if authority_match is None:
+            report_authority_issue(
+                f"{rel_discovery_log} entry #{idx} missing authority field "
+                "(required: Authority/权威级别 with primary|secondary|community)"
+            )
+        else:
+            authority_level = authority_match.group(1).strip().lower().rstrip(".,;)")
+            if authority_level not in DISCOVERY_AUTHORITY_LEVELS:
+                report_authority_issue(
+                    f"{rel_discovery_log} entry #{idx} has invalid authority level '{authority_level}' "
+                    f"(allowed: {', '.join(DISCOVERY_AUTHORITY_LEVELS)})"
+                )
+            elif authority_level == "primary":
+                primary_count += 1
+
+        if not DISCOVERY_AUTHORITY_RATIONALE_RE.search(block):
+            report_authority_issue(
+                f"{rel_discovery_log} entry #{idx} missing authority rationale "
+                "(required: Authority Rationale/权威依据)"
+            )
+
+    if primary_count < 1:
+        report_authority_issue(
+            f"{rel_discovery_log} must include at least 1 authoritative primary source "
+            "(official docs, standards, RFCs, main-repo docs)"
         )
+
+    preferred_template = skill_dir / DOCS_DIR / DISCOVERY_DIR_NAME / DISCOVERY_TEMPLATE_BASENAME
+    legacy_templates = [skill_dir / dirname / "tpl" / DISCOVERY_TEMPLATE_BASENAME for dirname in PLAYBOOK_DIR_ALIASES]
+    if preferred_template.is_file():
+        pass
+    else:
+        found_legacy_template = None
+        for candidate in legacy_templates:
+            if candidate.is_file():
+                found_legacy_template = candidate
+                break
+        if found_legacy_template is not None:
+            warnings.append(
+                f"discovery template uses legacy location: {found_legacy_template.relative_to(skill_dir).as_posix()}; "
+                f"prefer {DOCS_DIR}/{DISCOVERY_DIR_NAME}/{DISCOVERY_TEMPLATE_BASENAME}"
+            )
+        else:
+            warnings.append(
+                f"missing discovery template: {preferred_template.relative_to(skill_dir).as_posix()}; "
+                "add template for consistent search evidence capture"
+            )
 
     return errors, warnings
 
@@ -1335,6 +1492,70 @@ def scan_metadata_contract_signals(skill_text: str) -> list[str]:
     return warnings
 
 
+def scan_playbook_minimality(skill_dir: Path, skill_text: str) -> list[str]:
+    warnings: list[str] = []
+    skill_lower = skill_text.lower()
+
+    if not any(token in skill_lower for token in PLAYBOOK_MINIMALITY_HINTS):
+        warnings.append(
+            "playbook minimality principle is missing; add explicit rule: "
+            "if removing a file does not affect trigger/execution/output/archive, move it to docs/ and keep it out of payload"
+        )
+
+    for dirname in PLAYBOOK_DIR_ALIASES:
+        root = skill_dir / dirname
+        if not root.is_dir():
+            continue
+        for path in sorted(root.rglob("*")):
+            if not path.is_file():
+                continue
+            if path.suffix.lower() not in {".md", ".txt"}:
+                continue
+            stem = path.stem.lower()
+            if stem in {"readme", "start-here", "template-note"}:
+                continue
+            hit = next((token for token in PLAYBOOK_PROCESS_FILENAME_HINTS if token in stem), None)
+            if hit is None:
+                continue
+            rel = path.relative_to(skill_dir).as_posix()
+            warnings.append(
+                f"{rel} looks process-oriented ({hit}); if removing it does not affect skill runtime behavior, "
+                f"move it to {DOCS_DIR}/ and keep it out of payload"
+            )
+
+    return warnings
+
+
+def scan_skill_non_payload_references(skill_text: str, include: list[str]) -> list[str]:
+    errors: list[str] = []
+    payload_roots = {item.split("/", 1)[0] for item in include}
+    seen: set[tuple[str, str]] = set()
+
+    for match in SKILL_PATH_REFERENCE_RE.finditer(skill_text):
+        ref = match.group(1)
+        root = ref.split("/", 1)[0]
+        if root in payload_roots:
+            continue
+        key = (root, ref)
+        if key in seen:
+            continue
+        seen.add(key)
+        if root == DOCS_DIR:
+            errors.append(
+                f"SKILL.md references '{ref}', but '{DOCS_DIR}/' is not in SKILL_PAYLOAD include; "
+                "principle: if removing a doc does not affect runtime behavior, keep it in docs/ and do not reference it from SKILL.md "
+                "(原则: 删掉不影响技能使用的文档必须放入 docs，且 SKILL.md 不得引用)"
+            )
+            continue
+        errors.append(
+            f"SKILL.md references '{ref}', but '{root}/' is not in SKILL_PAYLOAD include; "
+            "principle: SKILL.md must only reference runtime payload paths "
+            "(原则: SKILL.md 只能引用 SKILL_PAYLOAD 中会被打包的运行时路径)"
+        )
+
+    return errors
+
+
 def scan_complexity_guardrails(skill_text: str, rules: dict[str, Any]) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -1413,8 +1634,10 @@ def audit_runtime_files(skill_dir: Path) -> tuple[list[str], list[str]]:
     runtime_dirs = {
         "scripts": ALLOWED_SCRIPT_EXTENSIONS,
         GATE_DIR: ALLOWED_GATE_EXTENSIONS,
-        REFERENCE_DIR_CANONICAL: ALLOWED_REFERENCE_EXTENSIONS,
-        REFERENCE_DIR_LEGACY: ALLOWED_REFERENCE_EXTENSIONS,
+        PLAYBOOK_DIR_CANONICAL: ALLOWED_REFERENCE_EXTENSIONS,
+        PLAYBOOK_DIR_LEGACY: ALLOWED_REFERENCE_EXTENSIONS,
+        PLAYBOOK_DIR_OLDER: ALLOWED_REFERENCE_EXTENSIONS,
+        DOCS_DIR: ALLOWED_REFERENCE_EXTENSIONS,
     }
 
     for dirname, allowed_ext in runtime_dirs.items():
@@ -1440,7 +1663,7 @@ def audit_runtime_files(skill_dir: Path) -> tuple[list[str], list[str]]:
 
             tokens = [tok for tok in re.split(r"[-_]+", stem) if tok]
             bad_terms = sorted(set(tok for tok in tokens if tok in LEGACY_TERMS))
-            if bad_terms:
+            if bad_terms and stem not in LEGACY_TERM_ALLOWLIST_STEMS:
                 errors.append(
                     f"file name contains legacy/workaround term {bad_terms}; rewrite to final-state naming: {rel}"
                 )
@@ -1460,7 +1683,7 @@ def scan_absolute_path_literals(skill_dir: Path, include: list[str]) -> list[str
 
     # Always scan SKILL.md, then scan payload/runtime text files.
     add_target(skill_dir / "SKILL.md")
-    scan_roots = include[:] if include else [REFERENCE_DIR_CANONICAL, REFERENCE_DIR_LEGACY, GATE_DIR, "agents"]
+    scan_roots = include[:] if include else [*PLAYBOOK_DIR_ALIASES, DOCS_DIR, GATE_DIR, "agents"]
 
     for rel in scan_roots:
         path = skill_dir / rel
@@ -1481,11 +1704,259 @@ def scan_absolute_path_literals(skill_dir: Path, include: list[str]) -> list[str
             continue
         rel = path.relative_to(skill_dir).as_posix()
         for idx, line in enumerate(text.splitlines(), 1):
-            if ABSOLUTE_POSIX_RE.search(line) or ABSOLUTE_WINDOWS_RE.search(line):
+            literals = [match.group(0) for match in ABSOLUTE_POSIX_RE.finditer(line)]
+            literals.extend(match.group(0) for match in ABSOLUTE_WINDOWS_RE.finditer(line))
+            leaked = [literal for literal in literals if not literal.startswith(ABSOLUTE_PATH_ALLOWED_PREFIXES)]
+            if leaked:
                 errors.append(
                     f"{rel}:{idx} contains absolute path literal; use relative paths or env variables in generated files"
                 )
     return errors
+
+
+def collect_script_files_for_lint(skill_dir: Path, include: list[str]) -> dict[str, list[Path]]:
+    buckets: dict[str, list[Path]] = {suffix: [] for suffix in ALLOWED_SCRIPT_EXTENSIONS}
+    scan_roots: list[str] = []
+    seen_roots: set[str] = set()
+
+    for rel in include:
+        if rel in seen_roots:
+            continue
+        seen_roots.add(rel)
+        scan_roots.append(rel)
+
+    for rel in ("scripts", GATE_DIR, "scripts_dev"):
+        if rel in seen_roots:
+            continue
+        seen_roots.add(rel)
+        scan_roots.append(rel)
+
+    for rel in scan_roots:
+        rel_path = Path(rel)
+        if rel_path.is_absolute() or ".." in rel_path.parts:
+            continue
+        root = skill_dir / rel
+        if not root.exists():
+            continue
+        if root.is_file():
+            suffix = root.suffix.lower()
+            if suffix in buckets:
+                buckets[suffix].append(root)
+            continue
+        for child in sorted(root.rglob("*")):
+            if not child.is_file():
+                continue
+            if "__pycache__" in child.parts or child.suffix.lower() == ".pyc":
+                continue
+            suffix = child.suffix.lower()
+            if suffix in buckets:
+                buckets[suffix].append(child)
+
+    for suffix, files in buckets.items():
+        buckets[suffix] = sorted(set(files))
+    return buckets
+
+
+def run_script_lint_gate(skill_dir: Path, include: list[str]) -> list[str]:
+    script_files = collect_script_files_for_lint(skill_dir, include)
+    errors: list[str] = []
+
+    py_files = script_files[".py"]
+    if py_files:
+        rel_py = [path.relative_to(skill_dir).as_posix() for path in py_files]
+        ruff_bin = shutil.which("ruff")
+        if ruff_bin is None:
+            errors.append("python lint gate requires `ruff` to be installed")
+        else:
+            ruff_run = subprocess.run(
+                [ruff_bin, "check", *rel_py],
+                cwd=skill_dir,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if ruff_run.returncode != 0:
+                errors.append("python lint failed (`ruff check`)")
+                for line in (ruff_run.stdout + ruff_run.stderr).splitlines():
+                    if line.strip():
+                        errors.append(f"  {line}")
+
+        py_compile_run = subprocess.run(
+            [sys.executable, "-m", "py_compile", *rel_py],
+            cwd=skill_dir,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if py_compile_run.returncode != 0:
+            errors.append("python lint failed (`python -m py_compile`)")
+            for line in (py_compile_run.stdout + py_compile_run.stderr).splitlines():
+                if line.strip():
+                    errors.append(f"  {line}")
+
+    sh_files = script_files[".sh"]
+    if sh_files:
+        bash_bin = shutil.which("bash")
+        if bash_bin is None:
+            errors.append("bash lint gate requires `bash` to be installed")
+        else:
+            for path in sh_files:
+                rel = path.relative_to(skill_dir).as_posix()
+                bash_run = subprocess.run(
+                    [bash_bin, "-n", rel],
+                    cwd=skill_dir,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if bash_run.returncode != 0:
+                    errors.append(f"bash lint failed (`bash -n`) on {rel}")
+                    for line in (bash_run.stdout + bash_run.stderr).splitlines():
+                        if line.strip():
+                            errors.append(f"  {line}")
+
+    js_files = script_files[".js"]
+    if js_files:
+        node_bin = shutil.which("node")
+        if node_bin is None:
+            errors.append("javascript lint gate requires `node` to be installed")
+        else:
+            for path in js_files:
+                rel = path.relative_to(skill_dir).as_posix()
+                node_run = subprocess.run(
+                    [node_bin, "--check", rel],
+                    cwd=skill_dir,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if node_run.returncode != 0:
+                    errors.append(f"javascript lint failed (`node --check`) on {rel}")
+                    for line in (node_run.stdout + node_run.stderr).splitlines():
+                        if line.strip():
+                            errors.append(f"  {line}")
+
+    ts_files = script_files[".ts"]
+    if ts_files:
+        tsc_bin = shutil.which("tsc")
+        if tsc_bin is None:
+            errors.append("typescript lint gate requires `tsc` to be installed")
+        else:
+            for path in ts_files:
+                rel = path.relative_to(skill_dir).as_posix()
+                tsc_run = subprocess.run(
+                    [tsc_bin, "--noEmit", "--pretty", "false", rel],
+                    cwd=skill_dir,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if tsc_run.returncode != 0:
+                    errors.append(f"typescript lint failed (`tsc --noEmit`) on {rel}")
+                    for line in (tsc_run.stdout + tsc_run.stderr).splitlines():
+                        if line.strip():
+                            errors.append(f"  {line}")
+
+    return errors
+
+
+def scan_nonlocal_script_resolution(skill_dir: Path) -> list[str]:
+    targets: set[Path] = set()
+
+    for rel in ("SKILL.md", "README.md", "AGENTS.md", "docs", "scripts", GATE_DIR):
+        root = skill_dir / rel
+        if not root.exists():
+            continue
+        if root.is_file():
+            targets.add(root)
+            continue
+        for path in root.rglob("*"):
+            if path.is_file():
+                targets.add(path)
+
+    for rel in (*PLAYBOOK_DIR_ALIASES,):
+        root = skill_dir / rel
+        if not root.exists():
+            continue
+        for path in root.rglob("*"):
+            if not path.is_file():
+                continue
+            suffix = path.suffix.lower()
+            if (
+                path.as_posix().endswith(SCRIPT_TEMPLATE_SUFFIXES)
+                or suffix in ABSOLUTE_PATH_SCAN_EXTENSIONS
+                or suffix == ".tpl"
+            ):
+                targets.add(path)
+
+    errors: list[str] = []
+    for path in sorted(targets):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        rel = path.relative_to(skill_dir).as_posix()
+        for idx, line in enumerate(text.splitlines(), 1):
+            if not any(pattern.search(line) for pattern in SCRIPT_RESOLUTION_FALLBACK_PATTERNS):
+                continue
+            if not any(hint in line for hint in SCRIPT_LOOKUP_CONTEXT_HINTS):
+                continue
+            errors.append(
+                f"{rel}:{idx} uses ~/.bagakit or BAGAKIT_HOME fallback for skill script/playbook lookup; "
+                "resolve from local skill payload or explicit env only (missing script is a bug)"
+            )
+
+    return errors
+
+
+def cmd_runtime_gate(args: argparse.Namespace) -> int:
+    skill_dir = Path(args.skill_dir).expanduser().resolve()
+    errors: list[str] = []
+
+    skill_md = skill_dir / "SKILL.md"
+    payload_file = skill_dir / "SKILL_PAYLOAD.json"
+    if not skill_md.exists():
+        errors.append(f"missing file: {skill_md}")
+    if not payload_file.exists():
+        errors.append(f"missing file: {payload_file}")
+    if errors:
+        for err in errors:
+            eprint(f"error: {err}")
+        return 1
+
+    payload, payload_errors = load_payload(payload_file)
+    errors.extend(payload_errors)
+    include: list[str] = []
+    if payload is not None:
+        raw_include = payload.get("include")
+        if not isinstance(raw_include, list) or not all(isinstance(item, str) for item in raw_include):
+            errors.append("SKILL_PAYLOAD.json include must be an array of strings")
+        else:
+            include = raw_include
+
+    if errors:
+        for err in errors:
+            eprint(f"error: {err}")
+        return 1
+
+    scan_roots: list[str] = []
+    seen_scan_roots: set[str] = set()
+    for rel in [*include, *PLAYBOOK_DIR_ALIASES, DOCS_DIR, GATE_DIR, "agents", "scripts"]:
+        if rel in seen_scan_roots:
+            continue
+        seen_scan_roots.add(rel)
+        scan_roots.append(rel)
+    errors.extend(scan_absolute_path_literals(skill_dir, scan_roots))
+    errors.extend(scan_nonlocal_script_resolution(skill_dir))
+    errors.extend(run_script_lint_gate(skill_dir, include))
+
+    if errors:
+        for err in errors:
+            eprint(f"error: {err}")
+        return 1
+
+    print("ok: runtime gate passed")
+    return 0
 
 
 def cmd_validate(args: argparse.Namespace) -> int:
@@ -1540,14 +2011,18 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
     if include:
         include_set = set(include)
-        has_reference_canonical, has_reference_legacy = detect_reference_layout(skill_dir)
-        has_reference_include = any(item in include_set for item in REFERENCE_DIR_ALIASES)
+        has_playbook_canonical, has_playbook_legacy, has_playbook_older = detect_playbook_layout(skill_dir)
+        has_playbook_include = any(item in include_set for item in PLAYBOOK_DIR_ALIASES)
         if len(include_set) != len(include):
             errors.append("SKILL_PAYLOAD.json include contains duplicate items")
         if "SKILL.md" not in include_set:
             errors.append("SKILL_PAYLOAD.json include must contain SKILL.md")
         if "README.md" in include_set:
             errors.append("SKILL_PAYLOAD.json include must not contain README.md")
+        if DOCS_DIR in include_set:
+            warnings.append(
+                f"payload includes {DOCS_DIR}/; prefer excluding process docs from runtime payload unless explicitly required"
+            )
         for path in include:
             if path.startswith("/") or ".." in Path(path).parts:
                 errors.append(f"payload path must stay inside skill directory: {path}")
@@ -1562,24 +2037,38 @@ def cmd_validate(args: argparse.Namespace) -> int:
             if has and not exists:
                 errors.append(f"payload includes missing directory: {runtime_dir}")
 
-        if (has_reference_canonical or has_reference_legacy) and not has_reference_include:
+        if (has_playbook_canonical or has_playbook_legacy or has_playbook_older) and not has_playbook_include:
             warnings.append(
-                f"directory exists but not included in payload: {REFERENCE_DIR_CANONICAL}/{REFERENCE_DIR_LEGACY}"
+                f"directory exists but not included in payload: "
+                f"{PLAYBOOK_DIR_CANONICAL}/{PLAYBOOK_DIR_LEGACY}/{PLAYBOOK_DIR_OLDER}"
             )
-        if REFERENCE_DIR_CANONICAL in include_set and not has_reference_canonical:
-            errors.append(f"payload includes missing directory: {REFERENCE_DIR_CANONICAL}")
-        if REFERENCE_DIR_LEGACY in include_set and not has_reference_legacy:
-            errors.append(f"payload includes missing directory: {REFERENCE_DIR_LEGACY}")
-        if has_reference_canonical and not (skill_dir / REFERENCE_DIR_CANONICAL / "tpl").is_dir():
-            warnings.append("reference layout should include reference/tpl for reusable templates")
-        if has_reference_legacy and not has_reference_canonical:
-            warnings.append("legacy references/ layout detected; prefer reference/ with reference/tpl")
-        if has_reference_canonical and has_reference_legacy:
-            warnings.append(
-                "both reference/ and references/ exist; prefer one canonical layout (reference/ + reference/tpl)"
-            )
+        if PLAYBOOK_DIR_CANONICAL in include_set and not has_playbook_canonical:
+            errors.append(f"payload includes missing directory: {PLAYBOOK_DIR_CANONICAL}")
+        if PLAYBOOK_DIR_LEGACY in include_set and not has_playbook_legacy:
+            errors.append(f"payload includes missing directory: {PLAYBOOK_DIR_LEGACY}")
+        if PLAYBOOK_DIR_OLDER in include_set and not has_playbook_older:
+            errors.append(f"payload includes missing directory: {PLAYBOOK_DIR_OLDER}")
 
-    discovery_errors, discovery_warnings = scan_discovery_evidence(skill_dir)
+        if has_playbook_canonical and not (skill_dir / PLAYBOOK_DIR_CANONICAL / "tpl").is_dir():
+            warnings.append("playbook layout should include playbook/tpl for reusable templates")
+        if has_playbook_legacy and not (skill_dir / PLAYBOOK_DIR_LEGACY / "tpl").is_dir():
+            warnings.append("legacy reference layout should include reference/tpl for reusable templates")
+        if has_playbook_older and not (skill_dir / PLAYBOOK_DIR_OLDER / "tpl").is_dir():
+            warnings.append("legacy references layout should include references/tpl for reusable templates")
+
+        if has_playbook_legacy and not has_playbook_canonical:
+            warnings.append("legacy reference/ layout detected; prefer playbook/ with playbook/tpl")
+        if has_playbook_older and not has_playbook_canonical:
+            warnings.append("legacy references/ layout detected; prefer playbook/ with playbook/tpl")
+        if has_playbook_canonical and (has_playbook_legacy or has_playbook_older):
+            warnings.append(
+                "multiple detail dirs detected (playbook/reference/references); prefer canonical playbook/ only"
+            )
+        errors.extend(scan_skill_non_payload_references(skill_text, include))
+
+    discovery_errors, discovery_warnings = scan_discovery_evidence(
+        skill_dir, strict_authority=bool(args.strict_authority)
+    )
     errors.extend(discovery_errors)
     warnings.extend(discovery_warnings)
 
@@ -1685,6 +2174,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
     errors.extend(scan_hard_coupling(skill_text, name or ""))
     warnings.extend(scan_metadata_contract_signals(skill_text))
+    warnings.extend(scan_playbook_minimality(skill_dir, skill_text))
     gate_errors, gate_warnings = scan_gate_layout(skill_dir)
     errors.extend(gate_errors)
     warnings.extend(gate_warnings)
@@ -1729,7 +2219,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_validate = sub.add_parser("validate", help="validate a skill folder")
     p_validate.add_argument("--skill-dir", required=True)
+    p_validate.add_argument(
+        "--strict-authority",
+        action="store_true",
+        help="treat discovery authority gate violations as hard errors",
+    )
     p_validate.set_defaults(func=cmd_validate)
+
+    p_runtime_gate = sub.add_parser("runtime-gate", help="enforce runtime hard gates (path + script lint)")
+    p_runtime_gate.add_argument("--skill-dir", required=True)
+    p_runtime_gate.set_defaults(func=cmd_runtime_gate)
 
     return parser
 

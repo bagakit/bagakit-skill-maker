@@ -2,6 +2,11 @@
 
 Create and validate portable skills with Bagakit-friendly defaults.
 
+This is the meta skill (skill-of-skills) for the Bagakit series:
+- used to create, refactor, merge, and govern contracts and structure of other bagakit skills;
+- focused on the generic skill-engineering layer (trigger boundaries, contract rules, structure layering, validation and packaging boundaries);
+- not presupposing the concrete capability direction of skills being governed.
+
 This skill combines:
 - official skill-creator scaffolding ideas,
 - "The Complete Guide to Building Skills for Claude" design points,
@@ -10,8 +15,9 @@ This skill combines:
 
 ## What it does
 
-- Scaffold a new skill folder with `SKILL.md`, `SKILL_PAYLOAD.json`, `scripts/`, `reference/`, `gate/` (optional `agents/`).
-- Keep reference layout clean: docs in `reference/`, templates in `reference/tpl/`.
+- Scaffold a new skill folder with `SKILL.md`, `SKILL_PAYLOAD.json`, `scripts/`, `playbook/`, `docs/discovery/`, `gate/` (optional `agents/`).
+- Keep detail layout clean: runtime detail docs in `playbook/` (legacy `reference/` accepted), templates in `<detail-dir>/tpl/`.
+- Enforce playbook minimality principle: if removing a file does not affect skill runtime behavior, move it to `docs/` and keep it out of payload.
 - Keep validation protocol layout clean: `gate/<case>/rules.toml` + `gate/<case>/check-*.py|sh|js|ts`.
 - Validate frontmatter, payload boundaries, and contract policy violations.
 - Promote semantic metadata contracts (avoid system-specific key proliferation such as `driver_*`; prefer generic keys like `driver` + `driver_meta`).
@@ -29,8 +35,11 @@ This skill combines:
 ## Quick Start
 
 ```bash
-sh scripts/bagakit_skill_maker.sh init --name my-skill --path . --with-agents
-sh scripts/bagakit_skill_maker.sh validate --skill-dir ./my-skill
+sh scripts/bagakit-skill-maker.sh init --name my-skill --path . --with-agents
+sh scripts/bagakit-skill-maker.sh validate --skill-dir ./my-skill
+# optional: hard-enforce discovery authority policy
+sh scripts/bagakit-skill-maker.sh validate --skill-dir ./my-skill --strict-authority
+sh scripts/bagakit-skill-maker.sh runtime-gate --skill-dir ./my-skill
 ```
 
 ## Validation Gates (Final-State)
@@ -44,7 +53,11 @@ sh scripts/bagakit_skill_maker.sh validate --skill-dir ./my-skill
 - standalone-first design (and `[[BAGAKIT]]` footer when Bagakit profile is enabled),
 - cross-skill exchange as optional contract/signal (no hard direct flow call),
 - runtime payload hygiene (`README.md` excluded; no duplicate/out-of-root include paths),
-- reference layout guidance (`reference/` docs + `reference/tpl/` templates; legacy `references/` flagged),
+- detail-dir layout guidance (`playbook/` default + `playbook/tpl/`; legacy `reference/` and `references/` flagged),
+- playbook minimality soft gate (warn on process-like files under playbook; migrate to `docs/` when runtime impact is none),
+- strict SKILL path gate (SKILL.md must not reference paths outside `SKILL_PAYLOAD.json` include; process docs stay unreferenced),
+- discovery evidence gate (`docs/discovery/discovery-log.md` required; legacy detail-dir discovery path accepted with warning),
+- discovery authority policy (`Authority/权威级别` + `Authority Rationale/权威依据`; at least one `primary` source expected, warn by default, fail with `--strict-authority`),
 - gate protocol layout guidance (`gate/<case>/rules.toml` + `check-*` scripts, and anti-patterns baseline case),
 - generated docs/runtime files avoid absolute path literals (use relative/env-based paths),
 - output archetype clarity (`action-handoff` + `memory-handoff` + archive destination evidence),
@@ -54,13 +67,24 @@ sh scripts/bagakit_skill_maker.sh validate --skill-dir ./my-skill
 
 `validate` intentionally does **not** score qualitative reasoning depth (for example discussion quality or writing quality); those should be specified as prompt requirements and reviewed by a coding agent/human.
 
+`runtime-gate` enforces the cross-skill hard gates:
+- no absolute path literals in skill/runtime/generated artifact text payloads (relative/env paths only),
+- no home-directory script lookup fallback (`~/.bagakit` / `BAGAKIT_HOME`) when resolving skill scripts; scripts must come from local skill `scripts/` payload or explicit skill-dir env,
+- missing required scripts are treated as packaging/indexing bugs and must fail fast (no fallback compatibility),
+- strict script lint gates when scripts exist:
+  - Python: `ruff check` + `python -m py_compile`,
+  - Bash: `bash -n`,
+  - JavaScript: `node --check`,
+  - TypeScript: `tsc --noEmit`.
+
 ## References
 
-- `reference/core-design-guide.md` (portable core rules)
-- `reference/bagakit-profile-guide.md` (Bagakit overlay rules)
-- `reference/skill-discovery-sources.md` (search-first discovery; standalone with optional ecosystem accelerators)
-- `reference/guidance-pack/patterns.md`
-- `reference/guidance-pack/anti-patterns.md`
-- `reference/guidance-pack/examples.md`
+- `playbook/core-design-guide.md` (portable core rules)
+- `playbook/bagakit-profile-guide.md` (Bagakit overlay rules)
+- `playbook/skill-discovery-sources.md` (search-first discovery; standalone with optional ecosystem accelerators)
+- `playbook/guidance-pack/patterns.md`
+- `playbook/guidance-pack/anti-patterns.md`
+- `playbook/guidance-pack/examples.md`
+- `docs/discovery/discovery-log-tpl.md`
 - `gate/anti-patterns/rules.toml`
 - `gate/anti-patterns/check-anti-patterns.py`

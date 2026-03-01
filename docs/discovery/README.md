@@ -3,7 +3,7 @@
 Store mandatory search evidence here before implementation.
 
 - Required log file: `discovery-log.md`
-- Template: `../tpl/discovery-log-tpl.md`
+- Template: `discovery-log-tpl.md`
 - Each entry must include:
   - `Source/来源`
   - `Checked/查看内容`
@@ -11,3 +11,7 @@ Store mandatory search evidence here before implementation.
   - `Usefulness/有用程度`
   - `Value/价值`
   - `Reference Plan/参考计划`
+  - `Authority/权威级别` (`primary|secondary|community`)
+  - `Authority Rationale/权威依据`
+- At least one entry should be `Authority: primary`.
+- `validate --strict-authority` upgrades authority warnings to hard errors.

@@ -1,9 +1,14 @@
 ---
 name: bagakit-skill-maker
-description: Create, improve, merge, or refactor portable skills with Bagakit-friendly defaults. Use when you need to scaffold a new skill repo, tighten trigger boundaries, split SKILL.md into scripts/reference/tpl/gate layers for progressive disclosure, enforce standalone-first contract rules, or validate runtime payload boundaries.
+description: Create, improve, merge, or refactor portable skills with Bagakit-friendly defaults. Use when you need to scaffold a new skill repo, tighten trigger boundaries, split SKILL.md into scripts/playbook/tpl/gate layers for progressive disclosure, enforce standalone-first contract rules, or validate runtime payload boundaries.
 ---
 
 # Bagakit Skill Maker
+
+This is the meta skill (skill-of-skills) for the Bagakit series:
+- used to create, refactor, merge, and govern contracts and structure of other bagakit skills;
+- focused on the generic skill-engineering layer (trigger boundaries, contract rules, structure layering, validation and packaging boundaries);
+- not presupposing the concrete capability direction of skills being governed.
 
 Build skills that are:
 
@@ -33,6 +38,17 @@ Build skills that are:
   - split when one skill contains unrelated workflows,
   - merge when multiple skills duplicate the same foundation and can share one contract.
 
+## Final-Version Principle (No Active Compatibility)
+
+- Default to final-version contracts; do not add backward-compatibility shims proactively.
+- When schema/file/protocol changes, do not auto-migrate old runtime state inside scripts.
+- Require explicit migration policy in target `SKILL.md`:
+  - no legacy compatibility by default,
+  - users migrate manually by diffing old/new contracts,
+  - migration scope and breakpoints are documented.
+- For upgrades from old versions, provide `playbook/migration-from-old-version.md` as migration guide; keep runtime clean (no active compatibility path).
+- Only add compatibility shims when the user explicitly requests them, and document scope + removal condition.
+
 ## Cross-Agent Goal
 
 - Target a portable skill design that works across major coding agents (for example Claude Code, Codex, OpenCode-like runtimes).
@@ -57,6 +73,8 @@ Build skills that are:
   - protocol format invariants (for example RFDP shape),
   - runtime payload boundaries,
   - generated file path portability (no absolute path literals),
+  - script resolution locality (no `~/.bagakit` / `BAGAKIT_HOME` fallback for locating skill scripts),
+  - language-specific script lint hard gates (Python/JS/Bash/TS when scripts exist),
   - completion destination evidence.
 - Script validation should verify objective invariants and destination evidence only; qualitative quality should be reviewed through prompts/checklists.
 - If a strict gate is required regardless of who executes, and extra autonomy does not improve outcomes, escalate to programmatic validation or strict SOP.
@@ -91,12 +109,19 @@ Build skills that are:
 - For machine-readable metadata blocks embedded in Markdown artifacts, prefer TOML frontmatter (`+++`), not YAML frontmatter (`---`).
 - Exception: SKILL.md header/frontmatter stays YAML because runtime toolchains commonly expect YAML there.
 
-## Reference Layout Principle
+## Playbook Layout Principle
 
-- Keep reference docs in `reference/`.
-- Keep reusable templates in `reference/tpl/`.
-- Keep discovery evidence in `reference/discovery/` as a standalone record set.
-- Avoid mixing templates into general docs; keep intent boundary clear for retrieval.
+- Keep skill-extension details in `playbook/`.
+- Keep reusable runtime templates in `<detail-dir>/tpl/` (`playbook/tpl/` by default).
+- Keep discovery/process evidence in process docs outside runtime payload.
+- Avoid mixing runtime templates into general process docs; keep intent boundaries clear.
+
+## Playbook Minimality Principle (Soft Gate)
+
+- Keep only runtime-essential detail docs in `playbook/`.
+- Litmus test: if removing a file does not affect trigger accuracy, execution correctness, output routes, or archive gate, move it to process docs and keep it out of payload.
+- Soft gate: when a `playbook/` file looks process-oriented (discussion/notes/onepager), warn and migrate it to process docs if runtime impact is none.
+- Hard gate: SKILL.md path references must stay inside `SKILL_PAYLOAD.json` include (process docs stay unreferenced by SKILL.md).
 
 ## Gate Layout Principle (Validation Protocol)
 
@@ -110,7 +135,7 @@ Build skills that are:
 ## Open Discovery Principle (Avoid Closed-Door Design)
 
 - For unresolved skill problems, discovery is mandatory before implementation.
-- Use `reference/skill-discovery-sources.md` as the default discovery playbook:
+- Use `playbook/skill-discovery-sources.md` as the default discovery playbook:
   1. define keyword sets,
   2. search ordered source layers,
   3. compare at least three candidates from the discovery yellow pages,
@@ -118,10 +143,11 @@ Build skills that are:
 - If discovery finds a suitable skill, install/adapt first; create from scratch only with a recorded gap rationale.
 - If another discovery skill/tool is available, use it as an optional accelerator on top of the default standalone path.
 - Discovery evidence is a hard gate:
-  - Must persist to `reference/discovery/discovery-log.md`.
-  - Must start from template `reference/tpl/discovery-log-tpl.md`.
+  - Must persist in process docs outside runtime payload.
+  - Must start from a structured discovery template kept in process docs.
   - Category headings are task-driven (for example `skills`, `权威资料`, `论文`, `开源库`), not fixed.
-  - Under each category, each entry must include: `Source/来源`, `Checked/查看内容`, `Relevance/关联度`, `Usefulness/有用程度`, `Value/价值`, `Reference Plan/参考计划`.
+  - Under each category, each entry must include: `Source/来源`, `Checked/查看内容`, `Relevance/关联度`, `Usefulness/有用程度`, `Value/价值`, `Reference Plan/参考计划`, `Authority/权威级别`, `Authority Rationale/权威依据`.
+  - Authority policy: at least one source should be `Authority: primary`; `validate --strict-authority` upgrades authority warnings to hard errors.
 
 ## Decision Categories
 
@@ -142,18 +168,18 @@ Build skills that are:
 
 0) Search-first discovery before creation/improvement.
 - Do not start implementation immediately for unresolved problems.
-- Use `reference/skill-discovery-sources.md` as the default discovery path.
-- Use `reference/tpl/discovery-log-tpl.md` to write `reference/discovery/discovery-log.md`.
+- Use `playbook/skill-discovery-sources.md` as the default discovery path.
+- Use a structured discovery template to write discovery evidence in process docs.
 - Do not assume any specific discovery skill/CLI is installed; keep discovery flow standalone.
 - Search in this order:
-  1. project-local docs/contracts and known skill catalogs first,
+  1. project-local contracts and known skill catalogs first,
   2. reliable primary sources (official docs / standards / authoritative guides),
   3. broader community solutions (GitHub / Stack Overflow / technical blogs),
   4. experience-only writeups last.
 - Prefer ready-to-use skills/tools/code before designing from scratch.
 - If discovery finds a more suitable complementary skill, use it as an accelerator on top of this default search path.
-- Record useful findings (source + checked + relevance + usefulness + value + reference plan) to avoid repeated search.
-- Discovery gate is incomplete unless `reference/discovery/discovery-log.md` has concrete inspected entries.
+- Record useful findings (source + checked + relevance + usefulness + value + reference plan + authority + authority rationale) to avoid repeated search.
+- Discovery gate is incomplete unless process docs contain concrete inspected entries and at least one primary authority source.
 
 1) Lock concrete use cases first.
 - Capture 3-5 real user prompts that should trigger the target skill.
@@ -162,7 +188,7 @@ Build skills that are:
 2) Design trigger and scope.
 - Write a specific `description` in SKILL frontmatter: what it does + when to use.
 - Keep one skill focused on one operational job. Split if triggers diverge.
-- If user asks to improve one existing skill, keep compatible semantics but remove ambiguity and redundant instructions.
+- If user asks to improve one existing skill, keep semantic intent and allow first-principles contract cleanup (do not preserve downward compatibility by default).
 - If user asks to merge multiple skills, combine overlapping workflows into one portable skill with clear sections and one validation contract.
 - Decide capability layer and hosting:
   - `macro-process` / `macro-tool`: can be considered for core meta-repo onboarding.
@@ -194,40 +220,48 @@ Build skills that are:
 
 5) Plan progressive disclosure.
 - Keep SKILL.md as an execution map, not a giant handbook.
-- Move deep details into `reference/`.
+- Move deep skill details into `playbook/`.
 - Put deterministic/fragile execution steps into `scripts/`.
 - Put validation rules + scripts into `gate/<case>/`.
 
 6) Scaffold and edit.
 - Run:
 ```bash
-sh scripts/bagakit_skill_maker.sh init --name <skill-name> --path <output-dir> [--with-agents]
+sh scripts/bagakit-skill-maker.sh init --name <skill-name> --path <output-dir> [--with-agents]
 ```
-- Fill generated `SKILL.md`, `reference/`, `reference/tpl/`, and `scripts/` with project-specific content.
+- Fill generated `SKILL.md`, `playbook/`, `playbook/tpl/`, process docs, and `scripts/` with project-specific content.
 - Fill generated `gate/<case>/rules.toml` and `gate/<case>/check-*` files for each validation case.
 
 7) Enforce core constraints + Bagakit profile defaults.
 - Run:
 ```bash
-sh scripts/bagakit_skill_maker.sh validate --skill-dir <skill-dir>
+sh scripts/bagakit-skill-maker.sh validate --skill-dir <skill-dir>
+# optional hard mode for discovery authority policy
+sh scripts/bagakit-skill-maker.sh validate --skill-dir <skill-dir> --strict-authority
+sh scripts/bagakit-skill-maker.sh runtime-gate --skill-dir <skill-dir>
 ```
 - Ensure `SKILL_PAYLOAD.json` excludes `README.md` and only ships runtime payload.
 - Ensure `SKILL_PAYLOAD.json` includes `gate/` as the validation protocol root.
 - Ensure cross-skill interaction is optional and schema/rule-driven, never mandatory direct flow-call.
+- Ensure target `SKILL.md` declares migration policy for breaking changes (default: no active compatibility, manual migration by diff).
 - Ensure `SKILL.md` keeps a bounded context budget (default hard gate: `<= 500` lines).
 - Ensure every validation case directory under `gate/` includes `rules.toml` + at least one `check-*` script.
 - Ensure `Makefile package-skill` honors `DIST_DIR` and emits artifact at `<DIST_DIR>/<SKILL_NAME>.skill`.
 - Ensure generated runtime/docs files do not contain absolute path literals; use relative/env-based paths only.
+- Ensure script lookup is local-first: resolve from the skill's own `scripts/` payload (or explicit `--skill-dir`/dedicated env), never `~/.bagakit` fallback.
+- If expected scripts are missing, treat it as a bug and fail fast; do not add fallback lookup compatibility.
+- Ensure script files pass language lint gates before release (`ruff check` + `python -m py_compile`, `bash -n`, `node --check`, `tsc --noEmit` when applicable).
 - Ensure `SKILL.md` defines output routes + archive gate as completion criteria.
 - Ensure archive gate explicitly names action-handoff + memory-handoff destinations.
-- Ensure `reference/discovery/discovery-log.md` exists and includes structured discovery evidence.
+- Ensure discovery evidence exists in process docs, includes structured inspected entries, and includes authority metadata with at least one primary source.
+- Ensure migration path is documented at `playbook/migration-from-old-version.md` when contract breaks are introduced.
 - Ensure qualitative quality checks are defined as prompt rubrics/checklists (agent-reviewed), not script-enforced pass/fail metrics.
 - If Bagakit profile is enabled, ensure `[[BAGAKIT]]` footer contract exists; otherwise keep generic mode.
 
 8) Iterate from production misses.
 - If over-triggering: narrow frontmatter description with stronger boundaries.
 - If under-triggering: add concrete trigger phrases and file/task examples.
-- Promote repeated manual fixes into scripts or reference docs/templates.
+- Promote repeated manual fixes into scripts or playbook docs and templates.
 - If granularity drifts, trigger split/merge with an explicit improve plan + verification matrix.
 
 9) Project-local evolution.
@@ -265,14 +299,15 @@ sh scripts/bagakit_skill_maker.sh validate --skill-dir <skill-dir>
 
 ## Design Guide
 
-- Use progressive reference docs/templates:
-  - `reference/core-design-guide.md` (portable core rules; always apply)
-  - `reference/bagakit-profile-guide.md` (Bagakit profile overlay; required for `bagakit-*`)
-  - `reference/skill-discovery-sources.md` (search-first sources and strategy)
-  - `reference/tpl/discovery-log-tpl.md` (mandatory discovery evidence template)
-  - `reference/guidance-pack/patterns.md` (recommended output/archive patterns)
-  - `reference/guidance-pack/anti-patterns.md` (what to avoid)
-  - `reference/guidance-pack/examples.md` (copy-ready examples)
+- Use progressive playbook docs and templates:
+  - `playbook/core-design-guide.md` (portable core rules; always apply)
+  - `playbook/bagakit-profile-guide.md` (Bagakit profile overlay; required for `bagakit-*`)
+  - `playbook/migration-from-old-version.md` (breaking-change migration guide; runtime remains shim-free by default)
+  - `playbook/skill-discovery-sources.md` (search-first sources and strategy)
+  - process-doc discovery template (mandatory discovery evidence template, kept out of runtime payload)
+  - `playbook/guidance-pack/patterns.md` (recommended output/archive patterns)
+  - `playbook/guidance-pack/anti-patterns.md` (what to avoid)
+  - `playbook/guidance-pack/examples.md` (copy-ready examples)
   - `gate/anti-patterns/rules.toml` (machine-readable anti-bloat validation rules)
   - `gate/anti-patterns/check-anti-patterns.py` (rule-driven anti-bloat checker)
 - For generic/non-Bagakit skills, apply core guide only.
@@ -337,7 +372,8 @@ When asked to create/refactor a skill, output:
 - final SKILL frontmatter + core workflow sections,
 - runtime payload decision (`SKILL_PAYLOAD.json`),
 - gate protocol decision (`gate/<case>/rules.toml` + `check-*` coverage),
-- discovery evidence decision (`reference/discovery/discovery-log.md` + categories + per-entry value assessment),
+- discovery evidence decision (process-doc discovery log + categories + per-entry value assessment),
+- migration policy decision (`playbook/migration-from-old-version.md` with breakpoints + mapping, no runtime shim by default),
 - output map (what outputs, default route, adapter routes),
 - archive gate design (completion criteria + destination reporting),
 - granularity decision (keep/split/merge + rationale),
@@ -347,5 +383,5 @@ When asked to create/refactor a skill, output:
 
 ## Non-Goals
 
-- Do not introduce backward-compatibility shims unless explicitly requested.
+- Do not introduce downward/backward compatibility shims by default.
 - Do not hard-bind to one external system name if a rule/schema contract can solve it.
