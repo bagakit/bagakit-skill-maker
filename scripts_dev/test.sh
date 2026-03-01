@@ -9,18 +9,40 @@ tmp="$(mktemp -d -t bagakit-skill-maker-test.XXXXXX)"
 trap 'rm -rf "$tmp"' EXIT
 
 echo "[test] compile scripts"
-python3 -m py_compile "${runtime_scripts_dir}/bagakit_skill_maker.py"
+python3 -m py_compile "${runtime_scripts_dir}/bagakit-skill-maker.py"
+
+echo "[test] runtime gate on skill-maker source"
+sh "${runtime_scripts_dir}/bagakit-skill-maker.sh" runtime-gate --skill-dir "${skill_root}" >/dev/null
+
+echo "[test] package should exclude bytecode caches"
+make -C "${skill_root}" clean package-skill >/dev/null
+if unzip -l "${skill_root}/dist/bagakit-skill-maker.skill" | grep -Eq "__pycache__/|\\.pyc"; then
+  echo "[test] expected package to exclude __pycache__/ and *.pyc" >&2
+  unzip -l "${skill_root}/dist/bagakit-skill-maker.skill" >&2
+  exit 1
+fi
+
+echo "[test] install should exclude bytecode caches"
+install_home="${tmp}/bagakit-home"
+make -C "${skill_root}" install-skill BAGAKIT_HOME="${install_home}" >/dev/null
+if find "${install_home}/skills/bagakit-skill-maker/scripts" -type f \( -path "*/__pycache__/*" -o -name "*.pyc" \) | grep -q .; then
+  echo "[test] expected install-skill to exclude __pycache__/ and *.pyc" >&2
+  find "${install_home}/skills/bagakit-skill-maker/scripts" -type f \( -path "*/__pycache__/*" -o -name "*.pyc" \) >&2
+  exit 1
+fi
 
 echo "[test] init"
-sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" init --name "Demo Skill" --path "$tmp" --with-agents >/dev/null
+sh "${runtime_scripts_dir}/bagakit-skill-maker.sh" init --name "Demo Skill" --path "$tmp" --with-agents >/dev/null
 
 target="${tmp}/demo-skill"
 [[ -d "$target" ]]
 [[ -f "${target}/SKILL.md" ]]
 [[ -f "${target}/SKILL_PAYLOAD.json" ]]
 [[ -f "${target}/agents/openai.yaml" ]]
-[[ -f "${target}/reference/start-here.md" ]]
-[[ -f "${target}/reference/tpl/template-note.md" ]]
+[[ -f "${target}/playbook/start-here.md" ]]
+[[ -f "${target}/playbook/tpl/template-note.md" ]]
+[[ -f "${target}/docs/discovery/discovery-log.md" ]]
+[[ -f "${target}/docs/discovery/discovery-log-tpl.md" ]]
 [[ -f "${target}/gate/README.md" ]]
 [[ -f "${target}/gate/anti-patterns/rules.toml" ]]
 [[ -f "${target}/gate/anti-patterns/check-anti-patterns.py" ]]
@@ -34,13 +56,13 @@ data = json.loads(p.read_text(encoding="utf-8"))
 inc = set(data.get("include", []))
 if "README.md" in inc:
     raise SystemExit("README.md must not be in payload include")
-for req in ("SKILL.md", "scripts", "reference", "gate"):
+for req in ("SKILL.md", "scripts", "playbook", "gate"):
     if req not in inc:
         raise SystemExit(f"missing payload item: {req}")
 PY
 
 echo "[test] validate should fail on TODO description"
-if sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$target" >/dev/null 2>&1; then
+if sh "${runtime_scripts_dir}/bagakit-skill-maker.sh" validate --skill-dir "$target" >/dev/null 2>&1; then
   echo "[test] expected validate to fail because description still TODO" >&2
   exit 1
 fi
@@ -57,7 +79,193 @@ text = text.replace(
 p.write_text(text, encoding="utf-8")
 PY
 
-sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$target" >/dev/null
+echo "[test] seed discovery evidence"
+cat > "${target}/docs/discovery/discovery-log.md" <<'MD'
+# Discovery Log
+
+## skills
+
+- Source: local-skill-catalog
+- Checked: reviewed existing portable skill templates and validation contracts
+- Relevance: high, directly matches scaffold+validate target
+- Usefulness: high, reuses proven payload and gate layout
+- Value: reduces drift and avoids one-off structure design
+- Reference Plan: reuse template and adapt wording to target scope
+- Authority: primary
+- Authority Rationale: project-local first-party catalog with directly executable contracts and source ownership
+
+- Source: official-agent-skill-guide
+- Checked: inspected trigger wording guidance and frontmatter recommendations
+- Relevance: high, directly affects trigger precision
+- Usefulness: medium, clarifies boundary phrasing
+- Value: improves trigger quality and reduces over-trigger risk
+- Reference Plan: rewrite description and When/When NOT sections with concrete boundaries
+- Authority: secondary
+- Authority Rationale: authoritative guidance summary but not the canonical runtime contract source
+
+- Source: contract-and-payload-checklist
+- Checked: inspected no-absolute-path and runtime-payload constraints
+- Relevance: high, required by runtime hard gates
+- Usefulness: high, provides release-time objective checks
+- Value: prevents portability/privacy leakage and lint regressions
+- Reference Plan: enforce runtime gate before release and keep payload runtime-only
+- Authority: secondary
+- Authority Rationale: internal checklist distills enforcement practice but is derived documentation
+MD
+
+sh "${runtime_scripts_dir}/bagakit-skill-maker.sh" validate --skill-dir "$target" >/dev/null
+sh "${runtime_scripts_dir}/bagakit-skill-maker.sh" runtime-gate --skill-dir "$target" >/dev/null
+sh "${runtime_scripts_dir}/bagakit-skill-maker.sh" validate --skill-dir "$target" --strict-authority >/dev/null
+
+echo "[test] authority gate should warn by default when no primary source"
+python3 - <<PY
+from pathlib import Path
+p = Path(r"${target}") / "docs/discovery/discovery-log.md"
+text = p.read_text(encoding="utf-8")
+text = text.replace("- Authority: primary", "- Authority: secondary", 1)
+p.write_text(text, encoding="utf-8")
+PY
+if ! authority_warn_output="$(sh "${runtime_scripts_dir}/bagakit-skill-maker.sh" validate --skill-dir "$target" 2>&1)"; then
+  echo "[test] expected validate to pass with authority warning in default mode" >&2
+  echo "$authority_warn_output" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$authority_warn_output" | grep -q "at least 1 authoritative primary source"; then
+  echo "[test] expected authority warning when no primary source is present" >&2
+  echo "$authority_warn_output" >&2
+  exit 1
+fi
+if sh "${runtime_scripts_dir}/bagakit-skill-maker.sh" validate --skill-dir "$target" --strict-authority >/dev/null 2>&1; then
+  echo "[test] expected strict authority mode to fail without a primary source" >&2
+  exit 1
+fi
+python3 - <<PY
+from pathlib import Path
+p = Path(r"${target}") / "docs/discovery/discovery-log.md"
+text = p.read_text(encoding="utf-8")
+text = text.replace("- Authority: secondary", "- Authority: primary", 1)
+p.write_text(text, encoding="utf-8")
+PY
+sh "${runtime_scripts_dir}/bagakit-skill-maker.sh" validate --skill-dir "$target" --strict-authority >/dev/null
+
+echo "[test] authority rationale missing should warn by default and fail in strict mode"
+python3 - <<PY
+from pathlib import Path
+p = Path(r"${target}") / "docs/discovery/discovery-log.md"
+text = p.read_text(encoding="utf-8")
+text = text.replace(
+    "- Authority Rationale: project-local first-party catalog with directly executable contracts and source ownership\n",
+    "",
+    1,
+)
+p.write_text(text, encoding="utf-8")
+PY
+if ! authority_warn_output="$(sh "${runtime_scripts_dir}/bagakit-skill-maker.sh" validate --skill-dir "$target" 2>&1)"; then
+  echo "[test] expected validate to pass with authority rationale warning in default mode" >&2
+  echo "$authority_warn_output" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$authority_warn_output" | grep -q "missing authority rationale"; then
+  echo "[test] expected authority rationale warning in default mode" >&2
+  echo "$authority_warn_output" >&2
+  exit 1
+fi
+if sh "${runtime_scripts_dir}/bagakit-skill-maker.sh" validate --skill-dir "$target" --strict-authority >/dev/null 2>&1; then
+  echo "[test] expected strict authority mode to fail without authority rationale" >&2
+  exit 1
+fi
+python3 - <<PY
+from pathlib import Path
+p = Path(r"${target}") / "docs/discovery/discovery-log.md"
+text = p.read_text(encoding="utf-8")
+needle = "- Authority: primary\n"
+replacement = (
+    "- Authority: primary\n"
+    "- Authority Rationale: project-local first-party catalog with directly executable contracts and source ownership\n"
+)
+text = text.replace(needle, replacement, 1)
+p.write_text(text, encoding="utf-8")
+PY
+sh "${runtime_scripts_dir}/bagakit-skill-maker.sh" validate --skill-dir "$target" --strict-authority >/dev/null
+
+echo "[test] playbook minimality soft gate should warn on process-like file"
+cat > "${target}/playbook/onepager.md" <<'MD'
+# Onepager
+
+Process snapshot.
+MD
+if ! soft_warn_output="$(sh "${runtime_scripts_dir}/bagakit-skill-maker.sh" validate --skill-dir "$target" 2>&1)"; then
+  echo "[test] expected validate to pass while emitting soft gate warning" >&2
+  echo "$soft_warn_output" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$soft_warn_output" | grep -q "looks process-oriented"; then
+  echo "[test] expected soft gate warning for process-like playbook file" >&2
+  echo "$soft_warn_output" >&2
+  exit 1
+fi
+rm -f "${target}/playbook/onepager.md"
+sh "${runtime_scripts_dir}/bagakit-skill-maker.sh" validate --skill-dir "$target" >/dev/null
+
+echo "[test] legacy reference alias should still pass"
+mv "${target}/playbook" "${target}/reference"
+python3 - <<PY
+import json
+from pathlib import Path
+p = Path(r"${target}") / "SKILL_PAYLOAD.json"
+data = json.loads(p.read_text(encoding="utf-8"))
+include = []
+for item in data.get("include", []):
+    include.append("reference" if item == "playbook" else item)
+data["include"] = include
+p.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+skill_md = Path(r"${target}") / "SKILL.md"
+text = skill_md.read_text(encoding="utf-8")
+text = text.replace("playbook/", "reference/")
+skill_md.write_text(text, encoding="utf-8")
+PY
+sh "${runtime_scripts_dir}/bagakit-skill-maker.sh" validate --skill-dir "$target" >/dev/null
+sh "${runtime_scripts_dir}/bagakit-skill-maker.sh" runtime-gate --skill-dir "$target" >/dev/null
+mv "${target}/reference" "${target}/playbook"
+python3 - <<PY
+import json
+from pathlib import Path
+p = Path(r"${target}") / "SKILL_PAYLOAD.json"
+data = json.loads(p.read_text(encoding="utf-8"))
+include = []
+for item in data.get("include", []):
+    include.append("playbook" if item == "reference" else item)
+data["include"] = include
+p.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+skill_md = Path(r"${target}") / "SKILL.md"
+text = skill_md.read_text(encoding="utf-8")
+text = text.replace("reference/", "playbook/")
+skill_md.write_text(text, encoding="utf-8")
+PY
+sh "${runtime_scripts_dir}/bagakit-skill-maker.sh" validate --skill-dir "$target" >/dev/null
+
+echo "[test] non-payload docs reference should fail"
+python3 - <<PY
+from pathlib import Path
+p = Path(r"${target}") / "SKILL.md"
+text = p.read_text(encoding="utf-8")
+text += "\nReference note: docs/runtime-notes.md\n"
+p.write_text(text, encoding="utf-8")
+PY
+if sh "${runtime_scripts_dir}/bagakit-skill-maker.sh" validate --skill-dir "$target" >/dev/null 2>&1; then
+  echo "[test] expected strict payload-path validation to fail on docs/ reference" >&2
+  exit 1
+fi
+python3 - <<PY
+from pathlib import Path
+p = Path(r"${target}") / "SKILL.md"
+text = p.read_text(encoding="utf-8")
+text = text.replace("\nReference note: docs/runtime-notes.md\n", "\n")
+p.write_text(text, encoding="utf-8")
+PY
+sh "${runtime_scripts_dir}/bagakit-skill-maker.sh" validate --skill-dir "$target" >/dev/null
 
 echo "[test] missing complexity guardrails should fail"
 python3 - <<PY
@@ -73,7 +281,7 @@ text = re.sub(
 )
 p.write_text(text, encoding="utf-8")
 PY
-if sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$target" >/dev/null 2>&1; then
+if sh "${runtime_scripts_dir}/bagakit-skill-maker.sh" validate --skill-dir "$target" >/dev/null 2>&1; then
   echo "[test] expected validation to fail without complexity guardrails section" >&2
   exit 1
 fi
@@ -106,18 +314,18 @@ insert = """
 text = text.replace("## Metadata Contract Principle\n", insert + "## Metadata Contract Principle\n", 1)
 p.write_text(text, encoding="utf-8")
 PY
-sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$target" >/dev/null
+sh "${runtime_scripts_dir}/bagakit-skill-maker.sh" validate --skill-dir "$target" >/dev/null
 
 echo "[test] missing anti-pattern gate rules should fail"
 mv "${target}/gate/anti-patterns/rules.toml" "${target}/gate/anti-patterns/rules.toml.bak"
-if sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$target" >/dev/null 2>&1; then
+if sh "${runtime_scripts_dir}/bagakit-skill-maker.sh" validate --skill-dir "$target" >/dev/null 2>&1; then
   echo "[test] expected validation to fail without gate/anti-patterns/rules.toml" >&2
   exit 1
 fi
 
 echo "[test] restore anti-pattern gate rules"
 mv "${target}/gate/anti-patterns/rules.toml.bak" "${target}/gate/anti-patterns/rules.toml"
-sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$target" >/dev/null
+sh "${runtime_scripts_dir}/bagakit-skill-maker.sh" validate --skill-dir "$target" >/dev/null
 
 echo "[test] missing when-not-to-use should fail"
 python3 - <<PY
@@ -133,7 +341,7 @@ text = re.sub(
 )
 p.write_text(text, encoding="utf-8")
 PY
-if sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$target" >/dev/null 2>&1; then
+if sh "${runtime_scripts_dir}/bagakit-skill-maker.sh" validate --skill-dir "$target" >/dev/null 2>&1; then
   echo "[test] expected validation to fail without 'When NOT to Use' section" >&2
   exit 1
 fi
@@ -153,7 +361,7 @@ insert = """
 text = text.replace("## Decision Categories\n", insert + "## Decision Categories\n", 1)
 p.write_text(text, encoding="utf-8")
 PY
-sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$target" >/dev/null
+sh "${runtime_scripts_dir}/bagakit-skill-maker.sh" validate --skill-dir "$target" >/dev/null
 
 echo "[test] missing fallback path should fail"
 python3 - <<PY
@@ -169,7 +377,7 @@ text = re.sub(
 )
 p.write_text(text, encoding="utf-8")
 PY
-if sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$target" >/dev/null 2>&1; then
+if sh "${runtime_scripts_dir}/bagakit-skill-maker.sh" validate --skill-dir "$target" >/dev/null 2>&1; then
   echo "[test] expected validation to fail without fallback path" >&2
   exit 1
 fi
@@ -189,7 +397,7 @@ insert = """
 text = text.replace("## Response Templates\n", insert + "## Response Templates\n", 1)
 p.write_text(text, encoding="utf-8")
 PY
-sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$target" >/dev/null
+sh "${runtime_scripts_dir}/bagakit-skill-maker.sh" validate --skill-dir "$target" >/dev/null
 
 echo "[test] missing output routes section should fail"
 python3 - <<PY
@@ -205,7 +413,7 @@ text = re.sub(
 )
 p.write_text(text, encoding="utf-8")
 PY
-if sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$target" >/dev/null 2>&1; then
+if sh "${runtime_scripts_dir}/bagakit-skill-maker.sh" validate --skill-dir "$target" >/dev/null 2>&1; then
   echo "[test] expected validation to fail without output routes section" >&2
   exit 1
 fi
@@ -227,7 +435,7 @@ insert = """
 text = text.replace("## Archive Gate (Completion Handoff)\n", insert + "## Archive Gate (Completion Handoff)\n", 1)
 p.write_text(text, encoding="utf-8")
 PY
-sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$target" >/dev/null
+sh "${runtime_scripts_dir}/bagakit-skill-maker.sh" validate --skill-dir "$target" >/dev/null
 
 echo "[test] missing archive gate section should fail"
 python3 - <<PY
@@ -243,7 +451,7 @@ text = re.sub(
 )
 p.write_text(text, encoding="utf-8")
 PY
-if sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$target" >/dev/null 2>&1; then
+if sh "${runtime_scripts_dir}/bagakit-skill-maker.sh" validate --skill-dir "$target" >/dev/null 2>&1; then
   echo "[test] expected validation to fail without archive gate section" >&2
   exit 1
 fi
@@ -265,17 +473,17 @@ insert = """
 text = text.replace("## Fallback Path (No Clear Skill Fit)\n", insert + "## Fallback Path (No Clear Skill Fit)\n", 1)
 p.write_text(text, encoding="utf-8")
 PY
-sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$target" >/dev/null
+sh "${runtime_scripts_dir}/bagakit-skill-maker.sh" validate --skill-dir "$target" >/dev/null
 
 echo "[test] hard coupling should fail"
 python3 - <<PY
 from pathlib import Path
 p = Path(r"${target}") / "SKILL.md"
 text = p.read_text(encoding="utf-8")
-text += "\nRun: bash ~/.bagakit/skills/bagakit-long-run/scripts/apply-long-run.sh .\n"
+text += '\nRun: bash "' + chr(36) + 'BAGAKIT_LONG_RUN_SKILL_DIR/scripts/apply-long-run.sh" .  # bagakit-long-run\n'
 p.write_text(text, encoding="utf-8")
 PY
-if sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$target" >/dev/null 2>&1; then
+if sh "${runtime_scripts_dir}/bagakit-skill-maker.sh" validate --skill-dir "$target" >/dev/null 2>&1; then
   echo "[test] expected hard coupling validation to fail" >&2
   exit 1
 fi
@@ -286,35 +494,36 @@ from pathlib import Path
 p = Path(r"${target}") / "SKILL.md"
 text = p.read_text(encoding="utf-8")
 text = text.replace(
-    "Run: bash ~/.bagakit/skills/bagakit-long-run/scripts/apply-long-run.sh .",
-    "Optional contract signal only: if bagakit-long-run is installed, exchange contract schema via docs/.bagakit/inbox/signals.",
+    'Run: bash "' + chr(36) + "BAGAKIT_LONG_RUN_SKILL_DIR/scripts/apply-long-run.sh" + '" .  # bagakit-long-run',
+    "Optional contract signal only: if bagakit-long-run is installed, exchange contract schema via playbook/contract-signals.md.",
 )
 p.write_text(text, encoding="utf-8")
 PY
-sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$target" >/dev/null
+sh "${runtime_scripts_dir}/bagakit-skill-maker.sh" validate --skill-dir "$target" >/dev/null
 
 echo "[test] absolute path literal should fail"
 python3 - <<PY
 from pathlib import Path
-p = Path(r"${target}") / "reference" / "start-here.md"
+p = Path(r"${target}") / "playbook" / "start-here.md"
 text = p.read_text(encoding="utf-8")
 text += "\nLeaky path example: /Users/demo/private/project\n"
 p.write_text(text, encoding="utf-8")
 PY
-if sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$target" >/dev/null 2>&1; then
-  echo "[test] expected validation to fail on absolute path literal" >&2
+if sh "${runtime_scripts_dir}/bagakit-skill-maker.sh" runtime-gate --skill-dir "$target" >/dev/null 2>&1; then
+  echo "[test] expected runtime gate to fail on absolute path literal" >&2
   exit 1
 fi
 
 echo "[test] env/relative path form should pass"
 python3 - <<PY
 from pathlib import Path
-p = Path(r"${target}") / "reference" / "start-here.md"
+p = Path(r"${target}") / "playbook" / "start-here.md"
 text = p.read_text(encoding="utf-8")
 text = text.replace("/Users/demo/private/project", "$" + "HOME/private/project")
 p.write_text(text, encoding="utf-8")
 PY
-sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$target" >/dev/null
+sh "${runtime_scripts_dir}/bagakit-skill-maker.sh" validate --skill-dir "$target" >/dev/null
+sh "${runtime_scripts_dir}/bagakit-skill-maker.sh" runtime-gate --skill-dir "$target" >/dev/null
 
 echo "[test] generic skill can omit [[BAGAKIT]] footer (warning only)"
 python3 - <<PY
@@ -330,10 +539,10 @@ text = re.sub(
 )
 p.write_text(text, encoding="utf-8")
 PY
-sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$target" >/dev/null
+sh "${runtime_scripts_dir}/bagakit-skill-maker.sh" validate --skill-dir "$target" >/dev/null
 
 echo "[test] bagakit-* skill must define [[BAGAKIT]] footer"
-sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" init --name "bagakit-demo" --path "$tmp" >/dev/null
+sh "${runtime_scripts_dir}/bagakit-skill-maker.sh" init --name "bagakit-demo" --path "$tmp" >/dev/null
 bagakit_target="${tmp}/bagakit-demo"
 python3 - <<PY
 from pathlib import Path
@@ -348,7 +557,7 @@ text = re.sub(
 )
 p.write_text(text, encoding="utf-8")
 PY
-if sh "${runtime_scripts_dir}/bagakit_skill_maker.sh" validate --skill-dir "$bagakit_target" >/dev/null 2>&1; then
+if sh "${runtime_scripts_dir}/bagakit-skill-maker.sh" validate --skill-dir "$bagakit_target" >/dev/null 2>&1; then
   echo "[test] expected validation to fail for bagakit-* skill without [[BAGAKIT]] footer" >&2
   exit 1
 fi
